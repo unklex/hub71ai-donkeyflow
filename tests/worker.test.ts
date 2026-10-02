@@ -8,20 +8,20 @@ test('health reports P1 without exposing secret',async()=>{
  const body=await response.json();assert.equal(body.status,'ok');assert.equal(body.api_key_configured,true);assert.equal(JSON.stringify(body).includes('test-secret'),false);
 });
 test('every requested stub returns cached sample data',async()=>{
- for(const [path,body] of Object.entries({'/api/plan':{},'/api/bundle':{budget:3000},'/api/intent':{text:'warm natural'},'/api/sell/detect':{},'/api/render':{bundle_id:'demo'}})){
+ for(const [path,body] of Object.entries({'/api/intent':{text:'warm natural'},'/api/sell/detect':{},'/api/render':{bundle_id:'demo'}})){
   const response=await worker.fetch(req(path,body));assert.equal(response.status,200,path);assert.equal((await response.json()).demo,true,path);
  }
 });
-test('uploads accepted without buffering media',async()=>{
+test('invalid plan uploads are rejected',async()=>{
  const data=new FormData();data.append('file',new Blob(['demo']),'plan.png');
- const response=await worker.fetch(new Request('https://example.test/api/plan',{method:'POST',body:data}));assert.equal(response.status,200);
+ const response=await worker.fetch(new Request('https://example.test/api/plan',{method:'POST',body:data}));assert.equal(response.status,422);
 });
 test('invalid requests and methods have explicit errors',async()=>{
  assert.equal((await worker.fetch(req('/api/bundle',{budget:-1}))).status,422);
  assert.equal((await worker.fetch(req('/api/intent',{}))).status,422);
  assert.equal((await worker.fetch(req('/api/plan',null,'GET'))).status,405);
  assert.equal((await worker.fetch(req('/api/unknown'))).status,404);
- assert.equal((await worker.fetch(req('/api/plan'),{DEMO_MODE:'0'})).status,501);
+ assert.equal((await worker.fetch(req('/api/plan'),{DEMO_MODE:'0'})).status,422);
 });
 test('page and unknown assets handled correctly',async()=>{
  assert.match(await (await worker.fetch(req('/',null,'GET'))).text(),/DonkeyFlow/);

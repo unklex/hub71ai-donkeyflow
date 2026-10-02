@@ -1,0 +1,104 @@
+[
+  {
+    "bedrooms": 2,
+    "community": "Yas Acres",
+    "id": "6641",
+    "images": [
+      {
+        "image_id": "73154819",
+        "label": "Yas Acres - 2 Bedroom Townhouse Type 2E Floor plan Ground Floor image2D",
+        "url": "https://images.bayut.com/thumbnails/73154819-800x600.jpeg",
+        "local_path": "plans/6641-73154819.jpeg",
+        "local_format": "JPEG (normalized from browser-delivered image bytes)"
+      },
+      {
+        "image_id": "73154821",
+        "label": "Yas Acres - 2 Bedroom Townhouse Type 2E Floor plan First Floor image2D",
+        "url": "https://images.bayut.com/thumbnails/73154821-800x600.jpeg",
+        "local_path": "plans/6641-73154821.jpeg",
+        "local_format": "JPEG (normalized from browser-delivered image bytes)"
+      }
+    ],
+    "size_source": "not provided on source page",
+    "size_sq_ft": null,
+    "source_url": "https://www.bayut.com/floorplans/details-6641.html",
+    "title": "Yas Acres - 2 Bedroom Townhouse Type 2E Floor plan",
+    "district": "Yas Island"
+  },
+  {
+    "bedrooms": 2,
+    "community": "Water's Edge",
+    "id": "30918",
+    "images": [
+      {
+        "image_id": "73154859",
+        "label": "Water's Edge - 2 Bedroom Apartment Type C Floor plan image2D",
+        "url": "https://images.bayut.com/thumbnails/73154859-800x600.jpeg",
+        "local_path": "plans/30918-73154859.jpeg",
+        "local_format": "JPEG (normalized from browser-delivered image bytes)"
+      }
+    ],
+    "size_source": "not provided on source page",
+    "size_sq_ft": null,
+    "source_url": "https://www.bayut.com/floorplans/details-30918.html",
+    "title": "Water's Edge - 2 Bedroom Apartment Type C Floor plan",
+    "district": "Yas Island"
+  },
+  {
+    "bedrooms": 2,
+    "community": "Tala Tower",
+    "id": "6356",
+    "images": [
+      {
+        "image_id": "73155973",
+        "label": "Tala Tower - 2 Bedroom Apartment Type D Floor plan image2D",
+        "url": "https://images.bayut.com/thumbnails/73155973-800x600.jpeg",
+        "local_path": "plans/6356-73155973.jpeg",
+        "local_format": "JPEG (normalized from browser-delivered image bytes)"
+      }
+    ],
+    "size_source": "not provided on source page",
+    "size_sq_ft": null,
+    "source_url": "https://www.bayut.com/floorplans/details-6356.html",
+    "title": "Tala Tower - 2 Bedroom Apartment Type D Floor plan",
+    "district": "Al Reem Island"
+  },
+  {
+    "bedrooms": 2,
+    "community": "Al Raha Lofts",
+    "id": "38006",
+    "images": [
+      {
+        "image_id": "263485813",
+        "label": "Al Raha Lofts - 2 Bedroom Apartment Type 1B-11 Floor plan image2D",
+        "url": "https://images.bayut.com/thumbnails/263485813-800x600.jpeg",
+        "local_path": "plans/38006-263485813.jpeg",
+        "local_format": "JPEG (normalized from browser-delivered image bytes)"
+      }
+    ],
+    "size_source": "not provided on source page",
+    "size_sq_ft": null,
+    "source_url": "https://www.bayut.com/floorplans/details-38006.html",
+    "title": "Al Raha Lofts - 2 Bedroom Apartment Type 1B-11 Floor plan",
+    "district": "Al Raha Beach"
+  },
+  {
+    "bedrooms": 2,
+    "community": "The Gate",
+    "id": "37150",
+    "images": [
+      {
+        "image_id": "244012233",
+        "label": "The Gate - 2 Bedroom Apartment Type B Floor plan image2D",
+        "url": "https://images.bayut.com/thumbnails/244012233-800x600.jpeg",
+        "local_path": "plans/37150-244012233.jpeg",
+        "local_format": "JPEG (normalized from browser-delivered image bytes)"
+      }
+    ],
+    "size_source": "not provided on source page",
+    "size_sq_ft": null,
+    "source_url": "https://www.bayut.com/floorplans/details-37150.html",
+    "title": "The Gate - 2 Bedroom Apartment Type B Floor plan",
+    "district": "Masdar City"
+  }
+]

@@ -1,5 +1,5 @@
 {
-  "d1": null,
+  "d1": {"binding":"DB"},
   "r2": null,
   "project_id": "appgprj_6abf47576ec88191bc2c4e6d2dbabc66"
 }

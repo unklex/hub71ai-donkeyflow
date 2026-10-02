@@ -21,5 +21,18 @@ assert.equal(
   "function",
   `${pathToFileURL(workerPath)} must export default.fetch`,
 );
+const catalogue = await workerModule.default.fetch(new Request('https://example.test/plans.json'));
+assert.equal(catalogue.status, 200);
+const plans = await catalogue.json();
+assert.ok(plans.length > 0);
+const image = await workerModule.default.fetch(new Request('https://example.test/' + plans[0].images[0].local_path));
+assert.equal(image.headers.get('Content-Type'), 'image/jpeg');
+const page = await workerModule.default.fetch(new Request('https://example.test/'));
+assert.match(await page.text(), /assets\/index/);
+// PDF.js uses a module worker, which browsers reject with application/octet-stream.
+const pdfWorkerAsset = source.match(/\/assets\/pdf\.worker\.min-[^"\\]+\.mjs/);
+assert.ok(pdfWorkerAsset, 'PDF renderer worker must be bundled');
+const pdfWorker = await workerModule.default.fetch(new Request('https://example.test' + pdfWorkerAsset[0]));
+assert.match(pdfWorker.headers.get('Content-Type'), /javascript/);
 
 console.log("Artifact is valid ESM and exports default.fetch");
