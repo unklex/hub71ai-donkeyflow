@@ -7,7 +7,7 @@ import type {PlanResult as Plan} from '../../shared/plan';
 import type {Category} from '../../shared/catalog';
 import {BundleEditor,NeedsChecklist,Moodboard,defaultNeeds,type Bundle} from './BundleEditor';
 import {extractFrames,cropItems} from './video';
-import {cashOffer,type DetectedItem} from '../../shared/sell';
+import {cashOffer,type DetectedItem,type Frame} from '../../shared/sell';
 type Style={tags:string[];palette:string[];summary:string;avoid:string[]};
 type Detected=DetectedItem;
 const furnishSteps=['Plan & brief','Rooms','What you need','Bundle','Order'];
@@ -28,6 +28,7 @@ function App(){
  const [pins,setPins]=useState<Partial<Record<Category,string>>>({});
  const [lotMode,setLotMode]=useState<'move_out_lot'|'instant_cash'>('move_out_lot'),[publishedId,setPublishedId]=useState(''),[renderBusy,setRenderBusy]=useState(false),[renderError,setRenderError]=useState('');
  const sellVersion=useRef(0),renderVersion=useRef(0);
+ const [videoFrames,setVideoFrames]=useState<Frame[]>([]);
  const requestVersion=useRef(0),lastBundleRequest=useRef('');
  const [building,setBuilding]=useState(''),[date,setDate]=useState('');
  const steps=mode==='sell'?sellSteps:furnishSteps;
@@ -39,7 +40,7 @@ function App(){
   if(kind==='sell'){
    const version=++sellVersion.current;setMessage('Reading your video…');
    const frames=await extractFrames(file,(done,total)=>{if(version===sellVersion.current)setMessage(`Extracting frame ${done} of ${total}…`)});
-   if(version!==sellVersion.current)return;setMessage(`Detecting furniture in ${frames.length} frames…`);
+   if(version!==sellVersion.current)return;setVideoFrames(frames);setMessage(`Detecting furniture in ${frames.length} frames…`);
    const result=await api<{items:Detected[]}>('/api/sell/detect',{frames});
    if(version!==sellVersion.current)return;
    const cropped=await cropItems(result.items,frames);if(version!==sellVersion.current)return;
@@ -87,7 +88,7 @@ function App(){
     <section className="canvas-panel" aria-label="Visual preview">
      <div className="canvas-toolbar"><div className="tabs" role="tablist" aria-label="Canvas view">{(['Plan','Moodboard','Render'] as const).map((name,i)=><button key={name} id={'tab-'+name} role="tab" aria-selected={tab===name} aria-controls="canvas-content" tabIndex={tab===name?0:-1} onClick={()=>setTab(name)} onKeyDown={e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const next=(i+(e.key==='ArrowRight'?1:2))%3;const name=(['Plan','Moodboard','Render'] as const)[next];setTab(name);document.getElementById('tab-'+name)?.focus()}}}>{name==='Plan'?<Home size={15}/>:name==='Moodboard'?<Palette size={15}/>:<ImageIcon size={15}/>} {name}</button>)}</div><span className="canvas-tag">{plan ? "METRES" : "PLAN"}</span></div>
      <div className={'canvas-body '+(tab==='Moodboard'?'moodboard':'')} role="tabpanel" id="canvas-content" aria-labelledby={'tab-'+tab}>
-      {tab==='Plan'&&(mode==='furnish'?(plan?<FloorPlan plan={plan} furniture={bundle?.items??[]}/>:<div className="empty"><Home size={42}/><h3>{busy?'Analysing floor plan…':'Choose or upload a floor plan'}</h3></div>):<div className="sell-overview"><Package size={54} strokeWidth={1.3}/><p className="eyebrow">ONE HOME. ONE LOT.</p><h2>Less moving.<br/>More moving on.</h2><p>Bring your pieces together<br/>for their next home.</p>{items.length>0&&<div className="sell-stats"><span><strong>{items.filter(i=>i.include).length}</strong>included pieces</span><span><strong>{money(total)}</strong>lot value</span></div>}</div>)}
+      {tab==='Plan'&&(mode==='furnish'?(plan?<FloorPlan plan={plan} furniture={bundle?.items??[]}/>:<div className="empty"><Home size={42}/><h3>{busy?'Analysing floor plan…':'Choose or upload a floor plan'}</h3></div>):videoFrames.length?<div className="video-frame-grid" aria-label="Sampled video frames">{videoFrames.map(f=><figure key={f.seen_at_s}><img src={f.image_url} alt={`Walkthrough frame at ${f.seen_at_s} seconds`}/><figcaption>{f.seen_at_s}s</figcaption></figure>)}</div>:<div className="sell-overview"><Package size={54} strokeWidth={1.3}/><p className="eyebrow">ONE HOME. ONE LOT.</p><h2>Less moving.<br/>More moving on.</h2><p>Bring your pieces together<br/>for their next home.</p>{items.length>0&&<div className="sell-stats"><span><strong>{items.filter(i=>i.include).length}</strong>included pieces</span><span><strong>{money(total)}</strong>lot value</span></div>}</div>)}
       {tab==='Moodboard'&&<Moodboard bundle={bundle} palette={style?.palette??['#e3ddd0','#23877d','#8ca6a3']} summary={style?.summary??'Natural textures, simple shapes and a little colour.'}/>}
       {tab==='Render'&&<div className="empty render-preview" aria-busy={renderBusy}>{renderBusy?<div role="status"><span className="render-spinner"/><h3>Rendering your living room…</h3><p>This may take a minute.</p></div>:render?<img className="render-image" src={render} alt="AI-generated living room with your selected furniture" onError={()=>{setRender(null);setRenderError('The render image could not be loaded. Please retry.')}}/>:<><ImageIcon size={42}/><h3>Your room, reimagined.</h3><p>{livingRoom?'Preview your selected living-room furniture.':'Build a bundle with living-room furniture to preview it.'}</p></>}<button className="secondary" disabled={busy||renderBusy||!livingRoom} onClick={()=>void loadRender()}>{render?'View room render':'Render my living room'}</button>{renderError&&<p className="error" role="alert">{renderError}</p>}</div>}
      </div>
