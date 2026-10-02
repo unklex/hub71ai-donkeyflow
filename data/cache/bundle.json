@@ -1,0 +1,106 @@
+{
+  "id": "demo-bundle",
+  "items": [
+    {
+      "id": "demo-sofa",
+      "title": "Three-seat linen sofa",
+      "category": "sofa",
+      "price_aed": 850,
+      "retail_aed": 2400,
+      "width": 2.1,
+      "depth": 0.9,
+      "height": 0.8,
+      "size_estimated": false,
+      "colour": "sand",
+      "style_tags": [
+        "minimal",
+        "natural"
+      ],
+      "condition": "Good",
+      "source": "demo",
+      "image_url": null,
+      "url": null,
+      "area": "Al Reem Island",
+      "pickup_id": "demo-1",
+      "needs_assembly": false
+    },
+    {
+      "id": "demo-bed",
+      "title": "Oak queen bed frame",
+      "category": "bed",
+      "price_aed": 650,
+      "retail_aed": 1800,
+      "width": 1.6,
+      "depth": 2.1,
+      "height": 0.9,
+      "size_estimated": false,
+      "colour": "oak",
+      "style_tags": [
+        "minimal",
+        "natural"
+      ],
+      "condition": "Good",
+      "source": "demo",
+      "image_url": null,
+      "url": null,
+      "area": "Yas Island",
+      "pickup_id": "demo-2",
+      "needs_assembly": true
+    },
+    {
+      "id": "demo-desk",
+      "title": "Compact writing desk",
+      "category": "desk",
+      "price_aed": 250,
+      "retail_aed": 750,
+      "width": 1.2,
+      "depth": 0.6,
+      "height": 0.75,
+      "size_estimated": true,
+      "colour": "oak",
+      "style_tags": [
+        "minimal",
+        "natural"
+      ],
+      "condition": "Good",
+      "source": "demo",
+      "image_url": null,
+      "url": null,
+      "area": "Yas Island",
+      "pickup_id": "demo-2",
+      "needs_assembly": false
+    }
+  ],
+  "placements": [
+    {
+      "item_id": "demo-sofa",
+      "room_id": "living",
+      "x_m": 1,
+      "y_m": 5.3,
+      "rotation": 0
+    },
+    {
+      "item_id": "demo-bed",
+      "room_id": "master",
+      "x_m": 1.3,
+      "y_m": 0.2,
+      "rotation": 0
+    },
+    {
+      "item_id": "demo-desk",
+      "room_id": "study",
+      "x_m": 0.4,
+      "y_m": 0.4,
+      "rotation": 0
+    }
+  ],
+  "total_aed": 1750,
+  "retail_aed": 4950,
+  "saving_pct": 64.65,
+  "co2_kg": 185,
+  "co2_is_estimate": true,
+  "explanation": "A sample bundle of warm, simple pieces for your living room, bedroom and study.",
+  "warnings": [
+    "P1 sample only. Budget, fit and style solving arrive in P3."
+  ]
+}

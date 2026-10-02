@@ -1,0 +1,27 @@
+{
+  "item": {
+    "id": "demo-sofa",
+    "title": "Three-seat linen sofa",
+    "category": "sofa",
+    "price_aed": 850,
+    "retail_aed": 2400,
+    "width": 2.1,
+    "depth": 0.9,
+    "height": 0.8,
+    "size_estimated": false,
+    "colour": "sand",
+    "style_tags": [
+      "minimal",
+      "natural"
+    ],
+    "condition": "Good",
+    "source": "demo",
+    "image_url": null,
+    "url": null,
+    "area": "Al Reem Island",
+    "pickup_id": "demo-1",
+    "needs_assembly": false
+  },
+  "fits": null,
+  "note": "Sample listing. Link parsing and fit checks arrive in a later phase."
+}

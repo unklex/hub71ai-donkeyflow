@@ -1,0 +1,71 @@
+{
+  "plan": {
+    "id": "demo-magnolias-2br",
+    "name": "Magnolias · 2 bedroom + study",
+    "area_sqft": 1450,
+    "rooms": [
+      {
+        "id": "living",
+        "name": "Living & dining",
+        "kind": "living",
+        "x_m": 0,
+        "y_m": 0,
+        "width": 4.2,
+        "length": 6.8,
+        "furnish": true,
+        "has_walk_in": false
+      },
+      {
+        "id": "master",
+        "name": "Main bedroom",
+        "kind": "bedroom",
+        "x_m": 4.2,
+        "y_m": 0,
+        "width": 4.2,
+        "length": 4.2,
+        "furnish": true,
+        "has_walk_in": true
+      },
+      {
+        "id": "study",
+        "name": "Study",
+        "kind": "study",
+        "x_m": 4.2,
+        "y_m": 4.2,
+        "width": 3.5,
+        "length": 3.5,
+        "furnish": true,
+        "has_walk_in": false
+      },
+      {
+        "id": "kitchen",
+        "name": "Kitchen",
+        "kind": "kitchen",
+        "x_m": 0,
+        "y_m": 6.8,
+        "width": 4.2,
+        "length": 2.6,
+        "furnish": false,
+        "has_walk_in": false
+      }
+    ],
+    "assumptions": [
+      "Illustrative demo geometry; not a verified developer plan.",
+      "Uploads return this cached plan in P1."
+    ]
+  },
+  "timeline": [
+    {
+      "seconds": 0,
+      "label": "Living room"
+    },
+    {
+      "seconds": 3,
+      "label": "Main bedroom"
+    },
+    {
+      "seconds": 6,
+      "label": "Study"
+    }
+  ]
+}

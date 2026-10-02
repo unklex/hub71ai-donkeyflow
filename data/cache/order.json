@@ -1,0 +1,11 @@
+{
+  "id": "demo-order",
+  "pickup_points": 2,
+  "trucks": 1,
+  "assembly_count": 1,
+  "delivery_aed": 350,
+  "assembly_aed": 90,
+  "total_aed": 2190,
+  "pdf_url": null,
+  "status": "demo_preview"
+}
