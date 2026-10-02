@@ -7,7 +7,13 @@ import type {PlanResult} from '../shared/plan.ts';
 const server=await createServer({configFile:false,optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,hmr:false},appType:'custom'});
 const {RoomEditor,FloorPlan,PlanPicker}=await server.ssrLoadModule('/frontend/src/PlanEditor.tsx') as typeof import('../frontend/src/PlanEditor.tsx');
 const {NeedsChecklist,defaultNeeds}=await server.ssrLoadModule('/frontend/src/BundleEditor.tsx') as typeof import('../frontend/src/BundleEditor.tsx');
+const {OrderEditor}=await server.ssrLoadModule('/frontend/src/OrderEditor.tsx') as typeof import('../frontend/src/OrderEditor.tsx');
 await server.close();
+test('order renders pickup count, one truck, assembly choices and editable request fields',()=>{
+ const bundle={id:'order',items:[{id:'sofa',title:'Test sofa',price_aed:1000},{id:'bed',title:'Test bed',price_aed:500}]} as import('../frontend/src/BundleEditor.tsx').Bundle;
+ const html=renderToStaticMarkup(React.createElement(OrderEditor,{bundle,propertyKind:'townhouse'}));
+ assert.match(html,/Number of pickup points/);assert.match(html,/1 truck/);assert.match(html,/Assembly · 0 items/);assert.match(html,/250 \+ 2 × AED 50/);assert.match(html,/1,850/);assert.match(html,/community gate permit/);assert.match(html,/Open printable request/);assert.match(html,/Download HTML/);assert.match(html,/Resident name/);
+});
 const plan:PlanResult={property_kind:'townhouse',floors:2,bedrooms:1,dims_source:'printed',total_area_sqm:null,model:'test-model',image_hash:'hash',cached:false,warnings:[],dimension_labels:[],rooms:[{id:'bath',name:'Bathroom',type:'bathroom',floor:0,width_m:null,length_m:2,x_m:null,y_m:null,confidence:.6,furnish:false},{id:'living',name:'Living',type:'living',floor:0,width_m:3.125,length_m:3,x_m:0,y_m:0,confidence:.9,furnish:true},{id:'upper',name:'Bedroom',type:'bedroom',floor:1,width_m:4,length_m:3,x_m:0,y_m:0,confidence:.9,furnish:true}]};
 test('editor preserves exact values, highlights unknown sizes and places excluded spaces last',()=>{
  const html=renderToStaticMarkup(React.createElement(RoomEditor,{plan,onChange:()=>{}}));assert.match(html,/value="3.125"/);assert.match(html,/Enter size/);assert.match(html,/unknown-size/);assert.ok(html.indexOf('Living')<html.indexOf('Bathroom'));assert.match(html,/excluded-room/);assert.match(html,/Include furniture/);assert.match(html,/check size/);assert.match(html,/test-model/);

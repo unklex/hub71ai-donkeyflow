@@ -8,6 +8,7 @@ import type {Category} from '../../shared/catalog';
 import {BundleEditor,NeedsChecklist,Moodboard,defaultNeeds,type Bundle} from './BundleEditor';
 import {extractFrames,cropItems} from './video';
 import {cashOffer,type DetectedItem,type Frame} from '../../shared/sell';
+import {OrderEditor} from './OrderEditor';
 type Style={tags:string[];palette:string[];summary:string;avoid:string[]};
 type Detected=DetectedItem;
 const furnishSteps=['Plan & brief','Rooms','What you need','Bundle','Order'];
@@ -15,9 +16,11 @@ const sellSteps=['Upload','What we found','Your lot'];
 const money=(n:number)=>new Intl.NumberFormat('en-AE',{style:'currency',currency:'AED',maximumFractionDigits:0}).format(n);
 async function api<T>(path:string,body?:object|FormData,signal?:AbortSignal):Promise<T>{
  const form=body instanceof FormData;
- const response=await fetch(path,body?{method:'POST',headers:form?undefined:{'Content-Type':'application/json'},body:form?body:JSON.stringify(body),signal}:{signal});
- const result=await response.json();
- if(!response.ok)throw new Error(result.detail||'Could not load the demo. Please try again.');
+ const timeout=AbortSignal.timeout(180000);const requestSignal=signal?AbortSignal.any([signal,timeout]):timeout;
+ let response:Response;
+ try{response=await fetch(path,body?{method:'POST',headers:form?undefined:{'Content-Type':'application/json'},body:form?body:JSON.stringify(body),signal:requestSignal}:{signal:requestSignal})}catch(e){if(signal?.aborted)throw e;throw new Error(timeout.aborted?'The request took too long. Please retry.':'Could not connect. Check your connection and try again.')}
+ let result:any;try{result=await response.json()}catch{throw new Error(`The service returned an unreadable response (${response.status}). Please retry.`)}
+ if(!response.ok)throw new Error(typeof result?.detail==='string'?result.detail:`Could not complete the request (${response.status}). Please retry.`);
  return result;
 }
 function App(){
@@ -30,9 +33,8 @@ function App(){
  const sellVersion=useRef(0),renderVersion=useRef(0);
  const [videoFrames,setVideoFrames]=useState<Frame[]>([]);
  const requestVersion=useRef(0),lastBundleRequest=useRef('');
- const [building,setBuilding]=useState(''),[date,setDate]=useState('');
  const steps=mode==='sell'?sellSteps:furnishSteps;
- async function run(action:()=>Promise<void>){setBusy(true);setError('');try{await action()}catch(e){setError(e instanceof Error?e.message:'Something went wrong.')}finally{setBusy(false)}}
+ async function run(action:()=>Promise<void>){setBusy(true);setError('');setMessage('');try{await action()}catch(e){setError(e instanceof Error?e.message:'Something went wrong. Please retry.');setMessage('')}finally{setBusy(false)}}
  useEffect(()=>{api<{status:string}>('/api/health').then(h=>setHealth(h.status==='ok')).catch(()=>setHealth(false))},[]);
  function choose(value:'furnish'|'sell'){sellVersion.current++;setMode(value);setStep(0);setMessage('');setError('');window.scrollTo({top:0,behavior:'instant'})}
  async function analyse(body:object|FormData){await run(async()=>{const result=await api<Plan>('/api/plan',body);setPlan(result);setNeeds(defaultNeeds(result));setPins({});setBundle(null);setStep(1);setTab('Plan');setMessage(`Plan analysed with ${result.model}${result.cached?' · saved result':''}. Review dimensions before continuing.`)})}
@@ -62,6 +64,7 @@ function App(){
  function removeCategory(category:Category){setPins(old=>({...old,[category]:'remove'}))}
  function addCategory(category:Category){setNeeds(old=>old.includes(category)?old:[...old,category]);setPins(old=>{const next={...old};delete next[category];return next})}
  async function next(){if(mode==='furnish'&&step===2){await loadBundle();return}setStep(Math.min(step+1,steps.length-1))}
+ function canVisit(index:number){return !busy&&(mode==='sell'?(index===0||items.some(i=>i.include)):(index===0||index<=2&&!!plan||index===3&&!!plan||index===4&&!!bundle?.items.length&&!error&&lastBundleRequest.current===JSON.stringify(bundleInput())))}
  const livingRoom=plan?.rooms.find(r=>r.furnish&&/living|lounge/i.test(r.type+' '+r.name)&&bundle?.items.some(i=>i.placement.room_id===r.id));
  useEffect(()=>{renderVersion.current++;setRender(null);setRenderError('');setRenderBusy(false)},[bundle,plan,style]);
  async function loadRender(){
@@ -73,7 +76,7 @@ function App(){
 
  const total=items.filter(i=>i.include).reduce((sum,i)=>sum+i.suggested_price_aed,0);
  return <div className="app">
-  <header className="header"><button className="brand" onClick={()=>{sellVersion.current++;setMode(null);setError('')}} aria-label="DonkeyFlow home"><span className="brand-mark"><Layers size={22}/></span>donkey<span>flow</span><span className="period">.</span></button><div className="header-meta"><span className="place"><MapPin size={14}/>Abu Dhabi</span></div></header>
+  <header className="header"><button className="brand" disabled={busy} onClick={()=>{sellVersion.current++;setMode(null);setError('')}} aria-label="DonkeyFlow home"><span className="brand-mark"><Layers size={22}/></span>donkey<span>flow</span><span className="period">.</span></button><div className="header-meta"><span className="place"><MapPin size={14}/>Abu Dhabi</span></div></header>
   {!mode?<main className="landing">
    <div className="landing-title"><p className="eyebrow">A NEW HOME FOR GOOD FURNITURE</p><h1>Your next move,<br/><span>a little lighter.</span></h1><p>Moving in or moving on? Let’s start with your home.</p></div>
    <div className="choice-grid">
@@ -82,8 +85,8 @@ function App(){
    </div>
    <div className="landing-foot"><span><Leaf size={17}/>Good pieces deserve another home.</span><span>Video furniture detection · A room preview for your next move</span></div>
   </main>:<main className="workspace-page">
-   <div className="workspace-heading"><div><button className="home-link" onClick={()=>setMode(null)}><ChevronLeft size={15}/>Choose your move</button><h1>{mode==='furnish'?'Make room for your new life.':'A next chapter for your furniture.'}</h1></div><div className="mode-switch" role="group" aria-label="Choose flow"><button aria-pressed={mode==='furnish'} onClick={()=>choose('furnish')}><Home size={16}/>Furnish my home</button><button aria-pressed={mode==='sell'} onClick={()=>choose('sell')}><Package size={16}/>Sell everything</button></div></div>
-   <nav className="stepbar" aria-label="Progress">{steps.map((name,i)=><button key={name} onClick={()=>{setStep(i);setMessage('');setError('')}} className={i===step?'active':i<step?'complete':''} aria-current={i===step?'step':undefined}><span className="step-number">{i<step?<Check size={14}/>:String(i+1).padStart(2,'0')}</span>{name}</button>)}</nav>
+   <div className="workspace-heading"><div><button className="home-link" disabled={busy} onClick={()=>setMode(null)}><ChevronLeft size={15}/>Choose your move</button><h1>{mode==='furnish'?'Make room for your new life.':'A next chapter for your furniture.'}</h1></div><div className="mode-switch" role="group" aria-label="Choose flow"><button aria-pressed={mode==='furnish'} disabled={busy} onClick={()=>choose('furnish')}><Home size={16}/>Furnish my home</button><button aria-pressed={mode==='sell'} disabled={busy} onClick={()=>choose('sell')}><Package size={16}/>Sell everything</button></div></div>
+   <nav className="stepbar" aria-label="Progress">{steps.map((name,i)=><button key={name} disabled={!canVisit(i)} onClick={()=>{setStep(i);setMessage('');setError('')}} className={i===step?'active':i<step?'complete':''} aria-current={i===step?'step':undefined}><span className="step-number">{i<step?<Check size={14}/>:String(i+1).padStart(2,'0')}</span>{name}</button>)}</nav>
    <div className="workspace">
     <section className="canvas-panel" aria-label="Visual preview">
      <div className="canvas-toolbar"><div className="tabs" role="tablist" aria-label="Canvas view">{(['Plan','Moodboard','Render'] as const).map((name,i)=><button key={name} id={'tab-'+name} role="tab" aria-selected={tab===name} aria-controls="canvas-content" tabIndex={tab===name?0:-1} onClick={()=>setTab(name)} onKeyDown={e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const next=(i+(e.key==='ArrowRight'?1:2))%3;const name=(['Plan','Moodboard','Render'] as const)[next];setTab(name);document.getElementById('tab-'+name)?.focus()}}}>{name==='Plan'?<Home size={15}/>:name==='Moodboard'?<Palette size={15}/>:<ImageIcon size={15}/>} {name}</button>)}</div><span className="canvas-tag">{plan ? "METRES" : "PLAN"}</span></div>
@@ -95,21 +98,22 @@ function App(){
      <div className="plan-caption"><div><strong>{tab==='Moodboard'?'Materials & colour':tab==='Render'?'Room preview':mode==='furnish'?plan?.property_kind??'Your space':'Your move-out overview'}</strong><span>{tab==='Plan'&&mode==='furnish'?`${plan?.total_area_sqm??'—'} m² · ${plan?.model??'Select a plan'}`:tab==='Render'?'AI visualisation · confirm measurements':mode==='sell'?'Your selected furniture':'Furniture inspiration'}</span></div>{tab==='Plan'&&mode==='furnish'&&<span className="scale">METRES</span>}</div>
      <div className="canvas-footer"><Leaf size={15}/>A second home for furniture. A lighter footprint.</div>
     </section>
-    <section className="control-panel" aria-label={steps[step]}>
+    <section className="control-panel" aria-label={steps[step]} aria-busy={busy}>
      <div className="panel-heading"><p className="eyebrow">STEP {String(step+1).padStart(2,'0')} / {String(steps.length).padStart(2,'0')}</p><h2>{steps[step]}</h2><p>{mode==='furnish'?['Start with your space. We’ll help fill it.','Get to know each room.','Choose the essentials for your new home.','A first look at your furniture bundle.','Everything together, in one delivery.'][step]:['A short walkthrough is a good start.','Review your detected furniture and prices.','Bring your pieces together in one lot.'][step]}</p></div>
      <div className="controls">
       {mode==='furnish'&&step===0&&<><PlanPicker busy={busy} onAnalyse={analyse}/><label className="field">What feels like home?<textarea rows={3} value={brief} onChange={e=>setBrief(e.target.value)}/></label><button className="text-button" disabled={busy} onClick={()=>void run(async()=>{setStyle((await api<{style:Style}>('/api/intent',{text:brief})).style);setTab('Moodboard');setMessage('Sample style loaded. Your brief is not analysed in P1.')})}><Palette size={15}/>Preview style</button>{style&&<div className="style-tags">{style.tags.map(t=><span key={t}>{t}</span>)}</div>}<Notice>Upload each floor separately or crop both floors from one image. Missing dimensions need your input.</Notice></>}
       {mode==='furnish'&&step===1&&<>{plan&&<RoomEditor plan={plan} onChange={value=>{setPlan(value);setNeeds(defaultNeeds(value));setPins({});setBundle(null)}}/>}</>}
       {mode==='furnish'&&step===2&&<NeedsChecklist plan={plan} needs={needs} onChange={value=>{setNeeds(value);setPins(old=>Object.fromEntries(Object.entries(old).filter(([category])=>value.includes(category as Category))))}}/>}
       {mode==='furnish'&&step===3&&<>{bundle?<><BundleEditor bundle={bundle} needs={needs} budget={budget} busy={busy} onBudget={setBudget} onAction={bundleAction} onRemove={removeCategory} onAdd={addCategory} onMessage={setMessage}/><Notice>No items are reserved. Confirm listing availability and measurements before purchase.</Notice></>:<div className="empty small"><Sofa size={38}/><p>Build a bundle for your rooms.</p><button className="secondary" disabled={busy} onClick={()=>void loadBundle()}>Build bundle</button></div>}</>}
-      {mode==='furnish'&&step===4&&<><div className="order-intro"><Package size={25}/><h3>One delivery. A fresh start.</h3><p>Delivery booking and building permits arrive in P6.</p></div><label className="field">Building or community<input value={building} onChange={e=>setBuilding(e.target.value)} placeholder="Your building name"/></label><label className="field">Preferred delivery date<input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><button className="secondary" onClick={()=>setMessage('Order preview noted on this page. No booking or payment has been made.')}>Preview order</button><Notice>No order is placed in P1. Your entries are temporary and are not saved.</Notice></>}
+      {mode==='furnish'&&step===4&&bundle?.items.length&&<OrderEditor key={bundle.id} bundle={bundle} propertyKind={plan?.property_kind??'tower'}/>}
       {mode==='sell'&&step===0&&<>{uploadButton('Upload walkthrough video','video/*','sell',Upload)}<div className="video-tips"><Film size={28}/><h3>A quick room-by-room walkthrough</h3><p>Keep the camera steady and show each piece clearly. We sample one frame every 3 seconds, up to 20 frames from the first minute.</p></div><Notice>Only sampled frames are sent to OpenAI for detection. Check estimated dimensions and condition before publishing.</Notice></>}
       {mode==='sell'&&step===1&&<>{items.length?<><div className="sell-items">{items.map(item=><article className="sell-item" key={item.id}><label className="sell-include"><input type="checkbox" checked={item.include} onChange={e=>editItem(item.id,{include:e.target.checked})} aria-label={`Include ${item.title}`}/>{item.thumbnail_url&&<img src={item.thumbnail_url} alt={`Video crop of ${item.title}`}/>}</label><div><strong>{item.title}</strong><small>{item.category.replaceAll('_',' ')} · {item.condition.replaceAll('_',' ')} · {item.seen_at_s}s</small><small>≈ {item.width_cm} × {item.depth_cm} cm · retail {money(item.retail_aed)}</small><label className="sell-price">Price (AED)<input type="number" min="0" max="1000000" step="10" value={item.suggested_price_aed} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)&&n>=0&&n<=1e6)editItem(item.id,{suggested_price_aed:n})}}/></label></div></article>)}</div><div className="total-row"><span>{items.filter(i=>i.include).length} included · lot total</span><strong>{money(total)}</strong></div><Notice>Prices use estimated retail × condition, rounded to AED 10. You can adjust them.</Notice></>:<div className="empty small"><Package size={38}/><p>No furniture detected yet.</p><button className="secondary" onClick={()=>setStep(0)}>Upload a video</button></div>}</>}
       {mode==='sell'&&step===2&&<><fieldset className="lot-options"><legend>How would you like to sell?</legend><label><input type="radio" name="lotMode" checked={lotMode==='move_out_lot'} onChange={()=>{setLotMode('move_out_lot');setLotReady(false)}}/><span>List as a move-out lot<strong>{money(total)}</strong></span></label><label><input type="radio" name="lotMode" checked={lotMode==='instant_cash'} onChange={()=>{setLotMode('instant_cash');setLotReady(false)}}/><span>Instant cash offer<strong>{money(cashOffer(total))}</strong><small>60% of your lot total</small></span></label></fieldset><div className="lot-card"><Package size={28}/><h3>{lotMode==='move_out_lot'?'One move-out lot':'Instant cash offer'}</h3>{items.filter(i=>i.include).map(i=><p key={i.id}>{i.title} · {money(i.suggested_price_aed)}</p>)}<strong>{money(lotMode==='move_out_lot'?total:cashOffer(total))}</strong><small>{items.filter(i=>i.include).length} included pieces</small></div><button className="primary" disabled={busy||!items.some(i=>i.include)||lotReady} onClick={()=>void publish()}>{lotReady?'Published':'Publish'}</button>{lotReady&&<div className="result" role="status"><CheckCircle2 size={22}/><span><strong>Lot published</strong><p>Saved reference: {publishedId}</p></span></div>}</>}
+      {busy&&<div className="loading-status" role="status"><span className="render-spinner"/>Processing… Please keep this page open.</div>}
       {message&&<div className="feedback" role="status">{message}</div>}
-      {error&&<div className="error" role="alert">{error}</div>}
+      {error&&<div className="error" role="alert">{error}{mode==='furnish'&&step===3&&<button className="secondary" disabled={busy} onClick={()=>void loadBundle()}>Retry bundle</button>}</div>}
      </div>
-     <div className="panel-footer"><span>{busy?'Processing…':health?'API connected':'API unavailable'}</span><div>{step>0&&<button className="back" disabled={busy} onClick={()=>setStep(step-1)}>Back</button>}{step<steps.length-1&&<button className="primary" disabled={busy||(mode==='furnish'&&!plan)||(mode==='sell'&&!items.some(i=>i.include))} onClick={()=>void next()}>Continue</button>}</div></div>
+     <div className="panel-footer"><span>{busy?'Processing…':health?'API connected':'API unavailable'}</span><div>{step>0&&<button className="back" disabled={busy} onClick={()=>setStep(step-1)}>Back</button>}{step<steps.length-1&&<button className="primary" disabled={busy||!canVisit(step+1)} onClick={()=>void next()}>Continue</button>}</div></div>
     </section>
    </div>
    <footer className="footer"><span>DonkeyFlow · Made for your next move.</span><span>Vision plan analysis · Review sizes before furnishing.</span></footer>

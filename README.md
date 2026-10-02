@@ -10,6 +10,8 @@ Workspace: left Plan/Moodboard/Render canvas, right controls. Responsive teal de
 Floor plans use live vision analysis and D1 caching. Furniture bundles use the D1 catalog and a deterministic TypeScript solver. Video selling uses browser frame extraction and live vision detection; published lots are saved in D1. Room renders use the image API and R2 caching. Style interpretation and order booking remain previews.
 
 ## Build and verify
+Order quotes show one truck, editable pickup counts, per-item assembly and furniture/service totals. Delivery is AED 250 + AED 50 per pickup; assembly is AED 90 per selected item. The move-in request offers tower service-lift or villa/townhouse gate access wording, editable fields and a printable/downloadable HTML draft. Requests are prepared locally and must be submitted to management by the resident; no booking or payment is performed.
+
 Requires Node 24+ (native TypeScript execution) and pnpm.
 ```sh
 pnpm install
