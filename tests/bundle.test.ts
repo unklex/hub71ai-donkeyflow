@@ -151,6 +151,13 @@ test('small model uses numeric placeholders and repeated bundles reuse the expla
  mock.mock.mockImplementation(async()=>Response.json({error:'secret'},{status:429}));const c=await (await createWorker().fetch(req(3003),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(c.explanation_source,'deterministic_fallback');assert.ok(!JSON.stringify(c).includes('secret'));
  sqlite.close();
 });
+test('failed explanations retry identical bundles and successful explanations are reused',async t=>{
+ const {db,sqlite}=database();sqlite.exec(await readFile(new URL('../migrations/0002_catalog.sql',import.meta.url),'utf8'));sqlite.exec(await readFile(new URL('../migrations/0003_api_spend.sql',import.meta.url),'utf8'));t.after(()=>sqlite.close());
+ const mock=t.mock.method(globalThis,'fetch',async()=>{throw new Error('Network unavailable')}),req=()=>new Request('https://test/api/bundle',{method:'POST',body:JSON.stringify(input(['sofa'],3217))}),worker=createWorker(),env={DB:db,OPENAI_API_KEY:'test'};
+ const first=await (await worker.fetch(req(),env)).json();assert.equal(first.explanation_source,'deterministic_fallback');assert.equal(mock.mock.callCount(),1);
+ mock.mock.mockImplementation(async()=>Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({sentences:['The selected pieces suit {{ROOM_SIZES}}.','Choosing {{SPEND}} spends {{TOTAL}} of {{BUDGET}} and leaves {{REMAINING}} unspent.']})}]}]}));
+ const second=await (await worker.fetch(req(),env)).json();assert.equal(second.id,first.id);assert.equal(second.explanation_source,'model');assert.match(second.explanation,/The selected pieces suit Living: 6 × 7 m/);assert.equal(mock.mock.callCount(),2);const third=await (await worker.fetch(req(),env)).json();assert.equal(third.explanation,second.explanation);assert.equal(third.explanation_source,'model');assert.equal(mock.mock.callCount(),2);
+});
 test('normalization does not guess footprint or misclassify tables and office chairs',()=>{
  assert.equal(snapshot.items.length,400);const rows=normalizeCatalog([{item_id:'a',category:'tables',title:'Console Table',price_aed:100,retail_price_new_aed:null,width_cm:null,depth_cm:50},{item_id:'b',category:'chairs-benches-stools',title:'Office chair',price_aed:100,retail_price_new_aed:200,width_cm:50,depth_cm:50}]);
  assert.equal(rows[0].category,null);assert.equal(rows[0].width,null);assert.equal(rows[0].retail_aed,null);assert.equal(rows[1].category,null);

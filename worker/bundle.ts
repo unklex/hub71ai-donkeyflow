@@ -202,8 +202,8 @@ export async function bundleRequest(request:Request,env:Env):Promise<Response> {
   const result=solveBundle(input,catalog);
   const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({input,result})));
   const id='bundle-'+Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('').slice(0,24);
-  let pending=explanations.get(id);if(!pending){pending=explain(input,result,env);explanations.set(id,pending)}
-  const explanation=await pending;
+  let pending=explanations.get(id);if(!pending){if(explanations.size>=500)explanations.delete(explanations.keys().next().value!);pending=explain(input,result,env);explanations.set(id,pending)}
+  let explanation:Awaited<ReturnType<typeof explain>>;try{explanation=await pending}catch(error){explanations.delete(id);throw error}if(explanation.explanation_source!=='model')explanations.delete(id);
   if(explanation.explanation_source!=='model')result.warnings.push('Model explanation unavailable; showing the computed room and spending summary.');
   return Response.json({id,...result,...explanation,pins:input.pins,needed_categories:input.needed_categories,demo:false},{headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
  }catch(error){return Response.json({detail:error instanceof BundleError?error.message:'Catalog database unavailable. Check migrations and retry.'},{status:error instanceof BundleError?error.status:503})}
