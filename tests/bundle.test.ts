@@ -78,6 +78,7 @@ test('validation handles unknown sizes, aliases, malformed pins, nonfinite budge
  assert.throws(()=>parseBundleInput({...input(['sofa']),needed_categories:['sofa','sofa']}),/unique/);
  assert.throws(()=>parseBundleInput({...input(['sofa']),pins:{bed:'id'}}),/must be requested/);
  assert.throws(()=>parseBundleInput({...input(['sofa']),style:[1]}),/style/);
+ assert.throws(()=>parseBundleInput({...input(['sofa']),needed_categories:['constructor']}),/Unknown category/);
  const parsed=parseBundleInput({...input(['tv_unit']),needed_categories:['TV unit'],rooms:[{...rooms[0],length_m:undefined,depth_m:7}],style:{tags:['Modern']}});assert.deepEqual(parsed.style,['modern']);assert.equal(parsed.rooms[0].length_m,7);
 });
 test('D1 schema imports all 400 rows idempotently, uses the index, and serves live bundles without AI',async()=>{

@@ -8,7 +8,7 @@ export type CatalogItem = CatalogRecord & {category:Category;retail_aed:number};
 export function categoryName(value:string):Category|null {
  const key=value.trim().toLowerCase().replace(/[ -]+/g,'_');
  const aliases:Record<string,Category>={tv:'tv_unit',tv_stand:'tv_unit',nightstand:'nightstands',bedside_table:'nightstands',dining:'dining_set',lamp:'floor_lamp'};
- return categories.includes(key as Category)?key as Category:aliases[key]??null;
+ return categories.includes(key as Category)?key as Category:Object.hasOwn(aliases,key)?aliases[key]:null;
 }
 export function normalizeCatalog(rows:Record<string,unknown>[]):CatalogRecord[] {
  const ids=new Set<string>();
