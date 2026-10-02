@@ -1,13 +1,14 @@
 import {spendValue} from './spend.ts';
 import {analysePlan,type D1Database} from './plan.ts';
 import {bundleRequest} from './bundle.ts';
+import {bundleIntent} from './intent.ts';
 import style from '../data/cache/style.json' with { type: 'json' };
 import {detectSell,publishLot} from './sell.ts';
 import {renderRoom,renderMedia,type R2Bucket} from './render.ts';
-export interface Env { OPENAI_API_KEY?: string; DEMO_MODE?: string; PLAN_VISION_MODEL?:string; PLAN_REASONING_EFFORT?:string; SPEND_LIMIT_USD?:string; COST_PLAN_CALL_USD?:string; COST_DETECT_USD?:string; COST_RENDER_USD?:string; COST_EXPLAIN_USD?:string; BUNDLE_EXPLANATION_MODEL?:string; SELL_VISION_MODEL?:string; IMAGE_MODEL?:string; DB?:D1Database; RENDERS?:R2Bucket }
+export interface Env { OPENAI_API_KEY?: string; DEMO_MODE?: string; PLAN_VISION_MODEL?:string; PLAN_REASONING_EFFORT?:string; SPEND_LIMIT_USD?:string; COST_PLAN_CALL_USD?:string; COST_DETECT_USD?:string; COST_RENDER_USD?:string; COST_EXPLAIN_USD?:string; COST_INTENT_USD?:string; INTENT_MODEL?:string; BUNDLE_EXPLANATION_MODEL?:string; SELL_VISION_MODEL?:string; IMAGE_MODEL?:string; DB?:D1Database; RENDERS?:R2Bucket }
 export type Asset = { type: string; base64: string };
 export type Assets = Record<string, Asset>;
-const methods:Record<string,string>={'/api/health':'GET','/api/plan':'POST','/api/bundle':'POST','/api/intent':'POST','/api/sell/detect':'POST','/api/sell/publish':'POST','/api/render':'POST'};
+const methods:Record<string,string>={'/api/health':'GET','/api/plan':'POST','/api/bundle':'POST','/api/bundle/intent':'POST','/api/intent':'POST','/api/sell/detect':'POST','/api/sell/publish':'POST','/api/render':'POST'};
 const reply=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 export function createWorker(assets:Assets={}) {
  return {
@@ -23,6 +24,7 @@ export function createWorker(assets:Assets={}) {
     }
     if(path==='/api/health'){const limit_usd=spendValue(env.SPEND_LIMIT_USD,5);let spent_usd:number|null=null;try{if(env.DB)spent_usd=Number((await env.DB.prepare('SELECT COALESCE(SUM(COALESCE(actual_usd,est_usd)),0) AS spent_usd FROM api_spend').bind().first<{spent_usd:number}>())?.spent_usd??0)}catch{}return reply({spent_usd,limit_usd,spend_tracking:spent_usd===null?'unavailable':'ok',remaining_usd:spent_usd===null?null:Math.max(0,limit_usd-spent_usd),status:'ok',live_ai:!!env.OPENAI_API_KEY&&!!env.DB,runtime:'cloudflare-worker',api_key_configured:!!env.OPENAI_API_KEY,d1_configured:!!env.DB,r2_configured:!!env.RENDERS,plan_model:env.PLAN_VISION_MODEL||'gpt-6-astra',sell_model:env.SELL_VISION_MODEL||'gpt-4.1-mini',image_model:env.IMAGE_MODEL||'gpt-image-1'})};
     if(path==='/api/bundle')return bundleRequest(request,env);
+    if(path==='/api/bundle/intent')return bundleIntent(request,env);
     if(path==='/api/sell/detect')return detectSell(request,env);
     if(path==='/api/sell/publish')return publishLot(request,env);
     if(path==='/api/render')return renderRoom(request,env);

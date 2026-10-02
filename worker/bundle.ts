@@ -1,4 +1,4 @@
-import {categories,categoryName,optionalDropOrder,co2Factors,type Category,type CatalogItem,type CatalogRecord} from '../shared/catalog.ts';
+import {categories,availableCategories,categoryLabels,categoryName,optionalDropOrder,co2Factors,type Category,type CatalogItem,type CatalogRecord} from '../shared/catalog.ts';
 import {reserveSpend,spendValue} from './spend.ts';
 import {excludedRoom} from '../shared/plan.ts';
 import type {Env} from './index.ts';
@@ -152,7 +152,7 @@ export function solveBundle(input:BundleInput,catalog:CatalogRecord[]) {
 type Solution=ReturnType<typeof solveBundle>;
 async function explain(input:BundleInput,result:Solution,env:Env):Promise<{explanation:string;explanation_source:string;explanation_model:string|null}> {
  const roomSizes=input.rooms.filter(r=>r.furnish!==false&&!excludedRoom(r)).map(r=>`${r.name}: ${r.width_m} × ${r.length_m} m`).join('; ');
- const spend=result.items.map(i=>`${i.category}: AED ${i.price_aed}`).join(', ')||'no purchasable items';
+ const spend=result.items.map(i=>`${categoryLabels[i.category]}: AED ${i.price_aed}`).join(', ')||'no purchasable items';
  const facts=`Room sizes: ${roomSizes}. Spending: ${spend}; total AED ${result.total_aed} of AED ${result.budget_aed}, leaving AED ${result.remaining_aed}.`;
  const fallback={explanation:facts,explanation_source:'deterministic_fallback',explanation_model:null};
  if(!env.OPENAI_API_KEY)return fallback;
@@ -172,9 +172,17 @@ async function explain(input:BundleInput,result:Solution,env:Env):Promise<{expla
   return {explanation:template.replace(/\{\{(\w+)\}\}/g,(_,k:string)=>replacements[k]),explanation_source:'model',explanation_model:body.model??model};
  }catch{return fallback}
 }
-export function resolveBundleAction(input:BundleInput,catalog:CatalogRecord[],action:unknown):BundleInput {
+export function resolveBundleAction(input:BundleInput,catalog:CatalogRecord[],action:unknown,notes:string[]=[]):BundleInput {
  if(action===undefined)return input;
+ if(Array.isArray(action)){
+  check(action.length<=8,'Provide at most 8 bundle actions.');
+  for(const next of action){try{const trial=resolveBundleAction(input,catalog,next);const result=solveBundle(trial,catalog);if(object(next)&&next.kind==='add'&&!result.items.some(i=>i.category===next.category))throw new BundleError(`No ${categoryLabels[next.category as Category]?.toLowerCase()??'item'} fits your rooms and budget.`,409);input=trial}catch(error){if(!(error instanceof BundleError)||![409,422].includes(error.status))throw error;notes.push(error.message)}}
+  return input;
+ }
  check(object(action),'Invalid bundle action.');
+ if(['remove','add'].includes(String(action.kind))){check(typeof action.category==='string'&&availableCategories.includes(action.category as Category),'Unknown bundle action category.');const category=action.category as Category,pins={...input.pins};if(action.kind==='remove')pins[category]='remove';else if(pins[category]==='remove')delete pins[category];return {...input,needed_categories:[...new Set([...input.needed_categories,category])],pins}}
+ if(action.kind==='budget'){check(positive(action.budget_aed)&&cents(action.budget_aed)>0&&action.budget_aed<=10_000_000,'budget_aed must be at least AED 0.01 and at most 10000000.');return {...input,budget_aed:round(action.budget_aed)}}
+ if(action.kind==='style'){check(Array.isArray(action.style_tags)&&action.style_tags.every(s=>typeof s==='string'&&s.trim().length>0&&s.length<=100),'Invalid style tags.');const style=[...new Set([...input.style,...action.style_tags.map(s=>s.trim().toLowerCase())])];check(style.length<=20,'Provide at most 20 style tags.');return {...input,style}}
  if(action.kind==='paste'){
   check(typeof action.url==='string','Provide a Dubizzle listing link.');
   let url:URL;try{url=new URL(action.url)}catch{throw new BundleError('Provide a valid Dubizzle URL.')}
@@ -184,12 +192,17 @@ export function resolveBundleAction(input:BundleInput,catalog:CatalogRecord[],ac
   check(item?.category,'This link is not in the available catalog yet. Try a catalog listing link.');
   return {...input,needed_categories:[...new Set([...input.needed_categories,item.category])],pins:{...input.pins,[item.category]:item.id}};
  }
- check(['cheaper','better','colour'].includes(String(action.kind))&&typeof action.item_id==='string','Invalid swap action.');
- const current=catalog.find(i=>i.id===action.item_id);check(current?.category,'Item is no longer available.');
- const candidates=catalog.filter(i=>i.category===current.category&&i.id!==current.id&&typeof i.retail_aed==='number').filter(i=>action.kind==='cheaper'?i.price_aed<current.price_aed:action.kind==='better'?Number(i.retail_aed)>Number(current.retail_aed):typeof i.color==='string'&&i.color!==current.color);
- candidates.sort((a,b)=>action.kind==='better'?Number(b.retail_aed)-Number(a.retail_aed)||a.price_aed-b.price_aed:a.price_aed-b.price_aed||lexical(a.id,b.id));
+ check(['cheaper','better','colour'].includes(String(action.kind)),'Invalid swap action.');
+ if(action.category!==undefined)check(typeof action.category==='string'&&availableCategories.includes(action.category as Category),'Unknown bundle action category.');
+ const itemId=action.category!==undefined?solveBundle(input,catalog).items.find(i=>i.category===action.category)?.id:action.item_id;
+ const current=catalog.find(i=>i.id===itemId);check(current?.category,'Item is no longer available in this bundle.');
+ check(action.color===undefined||action.color===null||(typeof action.color==='string'&&action.color.trim().length>0&&action.color.length<=100),'Invalid target color.');
+ const color=typeof action.color==='string'?action.color.trim().toLowerCase():null,matches=(i:CatalogRecord)=>!!color&&typeof i.color==='string'&&i.color.toLowerCase().includes(color);
+ if(action.kind==='colour'&&matches(current))return {...input,pins:{...input.pins,[current.category]:current.id}};
+ const candidates=catalog.filter(i=>i.category===current.category&&i.id!==current.id&&typeof i.retail_aed==='number').filter(i=>action.kind==='cheaper'?i.price_aed<current.price_aed:action.kind==='better'?Number(i.retail_aed)>Number(current.retail_aed):typeof i.color==='string'&&(matches(i)||i.color!==current.color));
+ candidates.sort((a,b)=>(action.kind==='colour'?Number(matches(b))-Number(matches(a)):0)||(action.kind==='better'?Number(b.retail_aed)-Number(a.retail_aed)||a.price_aed-b.price_aed:a.price_aed-b.price_aed||lexical(a.id,b.id)));
  for(const item of candidates){const trial={...input,pins:{...input.pins,[current.category]:item.id}};try{solveBundle(trial,catalog);return trial}catch(error){if(!(error instanceof BundleError))throw error}}
- throw new BundleError(`No ${action.kind} alternative fits this bundle and budget.`,409);
+ throw new BundleError(action.category===undefined?`No ${action.kind} alternative fits this bundle and budget.`:`No ${action.kind}${color?` ${color}`:''} ${categoryLabels[current.category].toLowerCase()} fits your rooms and budget.`,409);
 }
 const explanations=new Map<string,ReturnType<typeof explain>>();
 export async function bundleRequest(request:Request,env:Env):Promise<Response> {
@@ -197,14 +210,16 @@ export async function bundleRequest(request:Request,env:Env):Promise<Response> {
   let value:unknown;try{value=await request.json()}catch{throw new BundleError('Invalid JSON.')}
   let input=parseBundleInput(value);
   if(!env.DB)throw new BundleError('D1 DB binding is not configured.',503);
-  const catalog=await loadCatalog(env.DB,object(value)&&object(value.action)&&value.action.kind==='paste'?[...categories]:input.needed_categories);
+  const actions=object(value)?value.actions:undefined,hasActions=actions!==undefined;check(!hasActions||Array.isArray(actions),'actions must be an array.');
+  const catalog=await loadCatalog(env.DB,hasActions||object(value)&&object(value.action)&&value.action.kind==='paste'?[...categories]:input.needed_categories);
   input=resolveBundleAction(input,catalog,object(value)?value.action:undefined);
+  const notes:string[]=[];if(hasActions)input=resolveBundleAction(input,catalog,actions,notes);
   const result=solveBundle(input,catalog);
   const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({input,result})));
   const id='bundle-'+Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('').slice(0,24);
   let pending=explanations.get(id);if(!pending){if(explanations.size>=500)explanations.delete(explanations.keys().next().value!);pending=explain(input,result,env);explanations.set(id,pending)}
   let explanation:Awaited<ReturnType<typeof explain>>;try{explanation=await pending}catch(error){explanations.delete(id);throw error}if(explanation.explanation_source!=='model')explanations.delete(id);
   if(explanation.explanation_source!=='model')result.warnings.push('Model explanation unavailable; showing the computed room and spending summary.');
-  return Response.json({id,...result,...explanation,pins:input.pins,needed_categories:input.needed_categories,demo:false},{headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+  return Response.json({id,...result,...explanation,notes,style:input.style,pins:input.pins,needed_categories:input.needed_categories,demo:false},{headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
  }catch(error){return Response.json({detail:error instanceof BundleError?error.message:'Catalog database unavailable. Check migrations and retry.'},{status:error instanceof BundleError?error.status:503})}
 }

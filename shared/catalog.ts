@@ -1,5 +1,6 @@
 export const categories = ['bed','wardrobe','nightstands','sofa','tv_unit','coffee_table','dining_set','desk','armchair','rug','floor_lamp','tv','microwave','washing_machine'] as const;
 export type Category = typeof categories[number];
+export const categoryLabels:Record<Category,string>={sofa:'Sofa',tv_unit:'TV unit',coffee_table:'Coffee table',armchair:'Armchair',dining_set:'Dining set',bed:'Bed',wardrobe:'Wardrobe',nightstands:'Nightstands',desk:'Desk',rug:'Rug',floor_lamp:'Floor lamp',tv:'TV',microwave:'Microwave',washing_machine:'Washing machine'};
 export const optionalDropOrder:Category[] = ['floor_lamp','rug','nightstands','armchair','dining_set','desk'];
 // Illustrative avoided-new-production factors per purchased listing, not measured emissions.
 export const co2Factors:Record<Category,number> = {bed:80,wardrobe:100,nightstands:15,sofa:90,tv_unit:35,coffee_table:20,dining_set:75,desk:30,armchair:40,rug:10,floor_lamp:5,tv:150,microwave:40,washing_machine:200};

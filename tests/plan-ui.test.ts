@@ -6,9 +6,15 @@ import {createServer} from 'vite';
 import type {PlanResult} from '../shared/plan.ts';
 const server=await createServer({configFile:false,optimizeDeps:{noDiscovery:true,include:[]},server:{middlewareMode:true,hmr:false},appType:'custom'});
 const {RoomEditor,FloorPlan,PlanPicker}=await server.ssrLoadModule('/frontend/src/PlanEditor.tsx') as typeof import('../frontend/src/PlanEditor.tsx');
-const {NeedsChecklist,defaultNeeds}=await server.ssrLoadModule('/frontend/src/BundleEditor.tsx') as typeof import('../frontend/src/BundleEditor.tsx');
+const {BundleEditor,NeedsChecklist,defaultNeeds}=await server.ssrLoadModule('/frontend/src/BundleEditor.tsx') as typeof import('../frontend/src/BundleEditor.tsx');
 const {OrderEditor}=await server.ssrLoadModule('/frontend/src/OrderEditor.tsx') as typeof import('../frontend/src/OrderEditor.tsx');
 await server.close();
+
+test('bundle change form shows parsed chips, fallback hint, undo and solver notes',()=>{
+ const bundle={id:'test',items:[],placements:[],total_aed:0,retail_aed:0,saving_pct:0,co2_kg:0,explanation:'Computed facts.',warnings:[],notes:['No cheaper sofa fits your rooms and budget.'],omitted:[],pins:{},needed_categories:[],budget_aed:8000,style:[]} as import('../frontend/src/BundleEditor.tsx').Bundle;
+ const html=renderToStaticMarkup(React.createElement(BundleEditor,{bundle,needs:[],budget:8000,busy:false,onBudget:()=>{},onAction:async()=>{},onRemove:()=>{},onAdd:()=>{},onMessage:()=>{},onIntent:async()=>{},canUndo:true,onUndo:()=>{},intent:{source:'rules',reply:'Trying your changes.',actions:[{kind:'colour',category:'coffee_table',color:'grey',budget_aed:null,style_tags:[]},{kind:'budget',category:null,color:null,budget_aed:8000,style_tags:[]}]}}));
+ assert.match(html,/Tell us what to change/);assert.match(html,/rows="2"/);assert.match(html,/maxLength="500"/);assert.match(html,/Update bundle/);assert.match(html,/Colour grey · Coffee table/);assert.match(html,/Budget · AED.*8,000/);assert.match(html,/Understood with basic rules/);assert.match(html,/>Undo</);assert.match(html,/No cheaper sofa fits/);assert.ok(html.indexOf('Tell us what to change')<html.indexOf('Paste a Dubizzle link'));
+});
 test('order renders pickup count, one truck, assembly choices and editable request fields',()=>{
  const bundle={id:'order',items:[{id:'sofa',title:'Test sofa',price_aed:1000},{id:'bed',title:'Test bed',price_aed:500}]} as import('../frontend/src/BundleEditor.tsx').Bundle;
  const html=renderToStaticMarkup(React.createElement(OrderEditor,{bundle,propertyKind:'townhouse'}));

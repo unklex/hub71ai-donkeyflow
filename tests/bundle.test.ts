@@ -43,6 +43,26 @@ test('paste matches only a catalog Dubizzle listing and restores removed categor
  assert.throws(()=>resolveBundleAction(input([],300),[sofa],{kind:'paste',url:'https://dubizzle.com.evil.test/listing/sofa/'}),/HTTPS Dubizzle/);
  assert.throws(()=>resolveBundleAction(input([],300),[sofa],{kind:'paste',url:'https://abudhabi.dubizzle.com/missing/'}),/not in the available catalog/);
 });
+
+test('ordered actions use the current category item and roll back only impossible actions',()=>{
+ const catalog=[item('s300','sofa',300,600),item('s200','sofa',200,400),item('s100','sofa',100,200),item('ward','wardrobe'),item('desk','desk')],notes:string[]=[];
+ const req=input(['sofa','desk'],1000,{sofa:'s300'});req.style=['modern'];
+ const result=resolveBundleAction(req,catalog,[{kind:'cheaper',category:'sofa'},{kind:'cheaper',category:'sofa'},{kind:'remove',category:'desk'},{kind:'add',category:'wardrobe'},{kind:'budget',budget_aed:1},{kind:'budget',budget_aed:8000},{kind:'style',style_tags:['wood','modern']},{kind:'cheaper',category:'sofa'}],notes);
+ assert.equal(result.pins.sofa,'s100');assert.equal(result.pins.desk,'remove');assert.ok(result.needed_categories.includes('wardrobe'));assert.equal(result.budget_aed,8000);assert.deepEqual(result.style,['modern','wood']);assert.equal(notes.length,3);assert.match(notes[0],/No cheaper sofa fits/);assert.match(notes[2],/No cheaper sofa fits/);assert.equal(req.pins.desk,undefined);assert.equal(req.budget_aed,1000);assert.deepEqual(req.style,['modern']);
+ const added=resolveBundleAction(input(['desk'],1000,{desk:'remove'}),catalog,[{kind:'add',category:'desk'},{kind:'remove',category:'desk'},{kind:'add',category:'desk'}]);assert.equal(added.pins.desk,undefined);assert.ok(solveBundle(added,catalog).items.some(i=>i.category==='desk'));
+ const missingNotes:string[]=[];const missing=resolveBundleAction(input(['sofa']),catalog,[{kind:'add',category:'armchair'}],missingNotes);assert.ok(!missing.needed_categories.includes('armchair'));assert.match(missingNotes[0],/No armchair fits/);
+});
+
+test('target colour prefers grey candidates before cheaper different colours and checks feasibility',()=>{
+ const catalog=[{...item('current','sofa',100,200),color:'blue'},{...item('red','sofa',10,100),color:'red'},{...item('grey-big','sofa',20,100,20,20),color:'grey'},{...item('grey','sofa',150,250),color:'Light GREY'}];
+ const req=input(['sofa'],200,{sofa:'current'}),next=resolveBundleAction(req,catalog,[{kind:'colour',category:'sofa',color:'grey'}]);assert.equal(next.pins.sofa,'grey');assert.equal(resolveBundleAction(next,catalog,[{kind:'colour',category:'sofa',color:'grey'}]).pins.sofa,'grey');assert.equal(resolveBundleAction(input(['sofa'],100,{sofa:'current'}),catalog,[{kind:'colour',category:'sofa',color:'grey'}]).pins.sofa,'red');
+});
+
+test('bundle endpoint returns final preferences and notes for an actions array',async()=>{
+ const {db,sqlite}=database();sqlite.exec(await readFile(new URL('../migrations/0002_catalog.sql',import.meta.url),'utf8'));try{
+  const response=await createWorker().fetch(new Request('https://test/api/bundle',{method:'POST',body:JSON.stringify({...input(['sofa','desk']),actions:[{kind:'remove',category:'desk'},{kind:'add',category:'wardrobe'},{kind:'budget',budget_aed:8000},{kind:'style',style_tags:['wood']},{kind:'cheaper',category:'armchair'}]})}),{DB:db});assert.equal(response.status,200);const result=await response.json();assert.equal(result.budget_aed,8000);assert.equal(result.pins.desk,'remove');assert.ok(result.needed_categories.includes('wardrobe'));assert.deepEqual(result.style,['wood']);assert.equal(result.notes.length,1);assert.ok(result.items.some((i:CatalogItem)=>i.category==='wardrobe'));assert.match(result.explanation,/Sofa: AED/);assert.doesNotMatch(result.explanation,/tv_unit:|coffee_table:/);
+ }finally{sqlite.close()}
+});
 test('appliances retain separate categories and use measured kitchen and laundry rooms',()=>{
  assert.deepEqual(parseBundleInput({...input(['tv','microwave','washing_machine'])}).needed_categories,['tv','microwave','washing_machine']);
  const req=input(['tv','microwave','washing_machine'],300);req.rooms.push({id:'kitchen',name:'Kitchen',type:'kitchen',floor:0,width_m:3,length_m:3},{id:'laundry',name:'Laundry',type:'laundry',floor:0,width_m:2,length_m:2});

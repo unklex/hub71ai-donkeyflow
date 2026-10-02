@@ -25,6 +25,7 @@ No localhost server is required for the Sites workflow. The build creates a self
 GET /api/health
 POST /api/plan (JSON: plan_id, or multipart: file / floor_0 and optional floor_1)
 POST /api/bundle (JSON)
+POST /api/bundle/intent (JSON: text, bundle)
 POST /api/intent (JSON: text)
 POST /api/sell/detect (JSON: frames [{seen_at_s, image_url}])
 POST /api/sell/publish (JSON: mode, items)
@@ -62,7 +63,11 @@ Placements use room-local top-left metre coordinates and include floor and orien
 
 Each item returns `placement`, `price_aed`, `retail_aed`, `saving_pct`, `co2_kg` and `co2_is_estimate`; aggregate totals, remaining budget, placements and omissions are returned too. CO₂ factors are illustrative estimates per listing in `shared/catalog.ts`, not measured lifecycle claims. Retail benchmarks retain their original source metadata.
 
-Only the explanation uses a small model: `BUNDLE_EXPLANATION_MODEL` defaults to [gpt-4.1-mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini). The model produces two sentences with placeholders for room sizes and spending; TypeScript fills every numeric fact from the computed result. Missing credentials, upstream errors and invalid model prose use a labelled deterministic fallback without changing selection or totals. `explanation_source` and `explanation_model` expose which path was used. The stable bundle ID excludes generated prose.
+Item selection and pricing stay deterministic. The explanation uses a small model: `BUNDLE_EXPLANATION_MODEL` defaults to [gpt-4.1-mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini). The model produces two sentences with placeholders for room sizes and spending; TypeScript fills every numeric fact from the computed result. Missing credentials, upstream errors and invalid model prose use a labelled deterministic fallback without changing selection or totals. `explanation_source` and `explanation_model` expose which path was used. The stable bundle ID excludes generated prose.
+
+The Bundle step’s “Tell us what to change” box calls POST /api/bundle/intent with 1–500 characters and the current bundle (items, needed_categories, budget_aed). `INTENT_MODEL` defaults to `gpt-4.1-mini`; `COST_INTENT_USD` defaults to 0.01. The Responses call uses strict structured output, store:false and a 20-second timeout. It interprets at most eight actions and never chooses items or prices. Output is validated against available categories. Missing keys, capped spend and failed model calls use a basic regex parser and return source:rules.
+
+POST /api/bundle accepts ordered `actions` alongside the existing single `action`. Remove/add, budget, style, cheaper/better and target colour changes use the solver; infeasible changes are skipped with `notes`. Returned needs, pins, budget and style reflect successful changes. The UI shows parsed actions and reply, basic-rules feedback and solver notes, and offers Undo to restore the preceding bundle and preferences.
 
 ## Plan analysis
 
@@ -97,5 +102,7 @@ COST_PLAN_CALL_USD=0.50
 COST_DETECT_USD=0.15
 COST_RENDER_USD=0.25
 COST_EXPLAIN_USD=0.01
+COST_INTENT_USD=0.01
+INTENT_MODEL=gpt-4.1-mini
 ```
 `PLAN_REASONING_EFFORT=none` or any `gpt-4` plan model omits reasoning. Otherwise effort defaults to high. Each of the two plan passes reserves USD 0.50. Every live AI call atomically reserves its conservative estimate in D1; missing DB or unavailable spend accounting refuses the call. Estimates remain charged when actual dollar cost is unavailable, including failed calls. These estimates bound reserved spend, not provider billing; set estimates conservatively for your models. Saved plan/render results remain available at the cap; bundle explanations fall back to computed facts and are cached per stable bundle ID in the Worker isolate. Health reports spend, limit and remaining USD (null when accounting is unavailable).
