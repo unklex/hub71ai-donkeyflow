@@ -1,16 +1,18 @@
 import {analysePlan,type D1Database} from './plan.ts';
 import {bundleRequest} from './bundle.ts';
 import style from '../data/cache/style.json' with { type: 'json' };
-import detected from '../data/cache/detected_items.json' with { type: 'json' };
-export interface Env { OPENAI_API_KEY?: string; DEMO_MODE?: string; PLAN_VISION_MODEL?:string; BUNDLE_EXPLANATION_MODEL?:string; DB?:D1Database }
+import {detectSell,publishLot} from './sell.ts';
+import {renderRoom,renderMedia,type R2Bucket} from './render.ts';
+export interface Env { OPENAI_API_KEY?: string; DEMO_MODE?: string; PLAN_VISION_MODEL?:string; BUNDLE_EXPLANATION_MODEL?:string; SELL_VISION_MODEL?:string; IMAGE_MODEL?:string; DB?:D1Database; RENDERS?:R2Bucket }
 export type Asset = { type: string; base64: string };
 export type Assets = Record<string, Asset>;
-const methods:Record<string,string>={'/api/health':'GET','/api/plan':'POST','/api/bundle':'POST','/api/intent':'POST','/api/sell/detect':'POST','/api/render':'POST'};
-const reply=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-DonkeyFlow-Stage':'P1-stub','X-Content-Type-Options':'nosniff'}});
+const methods:Record<string,string>={'/api/health':'GET','/api/plan':'POST','/api/bundle':'POST','/api/intent':'POST','/api/sell/detect':'POST','/api/sell/publish':'POST','/api/render':'POST'};
+const reply=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store','X-DonkeyFlow-Stage':'P5','X-Content-Type-Options':'nosniff'}});
 export function createWorker(assets:Assets={}) {
  return {
   async fetch(request:Request, env:Env={}, _ctx?:unknown):Promise<Response> {
    const path=new URL(request.url).pathname;
+   if(path.startsWith('/api/media/renders/'))return renderMedia(request,env,path);
    if(path.startsWith('/api/')&&path!=='/api/media/render.png'){
     if(!methods[path])return reply({detail:'Not found'},404);
     if(request.method!==methods[path])return reply({detail:'Method not allowed'},405);
@@ -18,8 +20,11 @@ export function createWorker(assets:Assets={}) {
      const response=await analysePlan(request,env,assets);
      response.headers.set('Cache-Control','no-store');response.headers.set('X-Content-Type-Options','nosniff');return response;
     }
-    if(path==='/api/health')return reply({status:'ok',stage:'P2',demo:true,live_ai:!!env.OPENAI_API_KEY&&!!env.DB,runtime:'cloudflare-worker',api_key_configured:!!env.OPENAI_API_KEY,d1_configured:!!env.DB,plan_model:env.PLAN_VISION_MODEL||'gpt-6-astra'});
+    if(path==='/api/health')return reply({status:'ok',stage:'P5',live_ai:!!env.OPENAI_API_KEY&&!!env.DB,runtime:'cloudflare-worker',api_key_configured:!!env.OPENAI_API_KEY,d1_configured:!!env.DB,r2_configured:!!env.RENDERS,plan_model:env.PLAN_VISION_MODEL||'gpt-6-astra',sell_model:env.SELL_VISION_MODEL||'gpt-4.1-mini',image_model:env.IMAGE_MODEL||'gpt-image-1'});
     if(path==='/api/bundle')return bundleRequest(request,env);
+    if(path==='/api/sell/detect')return detectSell(request,env);
+    if(path==='/api/sell/publish')return publishLot(request,env);
+    if(path==='/api/render')return renderRoom(request,env);
     if(env.DEMO_MODE==='0')return reply({detail:'P1 supports demo stubs only. Enable demo mode.'},501);
     const type=request.headers.get('content-type')||'';
     if(type.includes('multipart/form-data')){
@@ -35,8 +40,6 @@ export function createWorker(assets:Assets={}) {
     }
     switch(path){
      case '/api/intent':return reply({style,intent:{action:'preview_style'},demo:true,message:'Cached style profile. Live interpretation arrives in a later phase.'});
-     case '/api/sell/detect':return reply({items:detected,demo:true});
-     case '/api/render':return reply({image_url:'/api/media/render.png',demo:true,message:'Placeholder image. AI room rendering arrives in P5.'});
     }
    }
    if(request.method!=='GET'&&request.method!=='HEAD')return new Response('Method not allowed',{status:405});

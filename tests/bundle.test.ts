@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFile} from 'node:fs/promises';
-import {parseBundleInput,solveBundle,type BundleInput} from '../worker/bundle.ts';
+import {parseBundleInput,solveBundle,resolveBundleAction,type BundleInput} from '../worker/bundle.ts';
 import {createWorker} from '../worker/index.ts';
 import {normalizeCatalog,optionalDropOrder,type CatalogItem,type Category} from '../shared/catalog.ts';
 import type {D1Database,D1Statement} from '../worker/plan.ts';
@@ -10,6 +10,31 @@ import snapshot from '../data/catalog.json' with {type:'json'};
 const rooms=[{id:'living',type:'living',name:'Living',floor:0,width_m:6,length_m:7},{id:'bedroom',type:'bedroom',name:'Bedroom',floor:1,width_m:5,length_m:5},{id:'study',type:'study',name:'Study',floor:1,width_m:3.125,length_m:3}];
 const input=(needed_categories:Category[],budget_aed=1000,pins:BundleInput['pins']={}):BundleInput=>({rooms,needed_categories,style:[],budget_aed,pins});
 const item=(id:string,category:Category,price_aed=100,retail_aed=200,width=.5,depth=.5):CatalogItem=>({id,title:id,category,price_aed,retail_aed,width,depth,height:.5,area:'Abu Dhabi',style_tags:[],size_estimated:false});
+test('swaps pin a fitting alternative and reject impossible changes',()=>{
+ const current={...item('current','sofa',200,400),color:'grey'};
+ const cheap={...item('cheap','sofa',100,200),color:'grey'};
+ const better={...item('better','sofa',300,600),color:'blue'};
+ const catalog=[current,cheap,better,{...item('oversize','sofa',50,1000,20,20),color:'red'}];
+ assert.equal(resolveBundleAction(input(['sofa'],400),catalog,{kind:'cheaper',item_id:'current'}).pins.sofa,'cheap');
+ assert.equal(resolveBundleAction(input(['sofa'],400),catalog,{kind:'better',item_id:'current'}).pins.sofa,'better');
+ assert.equal(resolveBundleAction(input(['sofa'],400),catalog,{kind:'colour',item_id:'current'}).pins.sofa,'better');
+ assert.throws(()=>resolveBundleAction(input(['sofa'],200),catalog,{kind:'better',item_id:'current'}),/No better alternative/);
+});
+test('paste matches only a catalog Dubizzle listing and restores removed categories',()=>{
+ const sofa={...item('sofa','sofa'),listing_url:'https://abudhabi.dubizzle.com/listing/sofa/'};
+ const result=resolveBundleAction(input([],300),[sofa],{kind:'paste',url:sofa.listing_url+'?ref=share'});
+ assert.deepEqual(result.needed_categories,['sofa']);assert.equal(result.pins.sofa,'sofa');
+ assert.throws(()=>resolveBundleAction(input([],300),[sofa],{kind:'paste',url:'https://dubizzle.com.evil.test/listing/sofa/'}),/HTTPS Dubizzle/);
+ assert.throws(()=>resolveBundleAction(input([],300),[sofa],{kind:'paste',url:'https://abudhabi.dubizzle.com/missing/'}),/not in the available catalog/);
+});
+test('appliances retain separate categories and use measured kitchen and laundry rooms',()=>{
+ assert.deepEqual(parseBundleInput({...input(['tv','microwave','washing_machine'])}).needed_categories,['tv','microwave','washing_machine']);
+ const req=input(['tv','microwave','washing_machine'],300);req.rooms.push({id:'kitchen',name:'Kitchen',type:'kitchen',floor:0,width_m:3,length_m:3},{id:'laundry',name:'Laundry',type:'laundry',floor:0,width_m:2,length_m:2});
+ const result=solveBundle(req,[item('tv','tv'),item('microwave','microwave'),item('washing_machine','washing_machine')]);
+ assert.equal(result.items.find(i=>i.category==='tv')?.placement.room_id,'living');
+ assert.equal(result.items.find(i=>i.category==='microwave')?.placement.room_id,'kitchen');
+ assert.equal(result.items.find(i=>i.category==='washing_machine')?.placement.room_id,'laundry');
+});
 function database(){
  const sqlite=new DatabaseSync(':memory:');
  const wrap=(sql:string,values:unknown[]):D1Statement=>({first:async<T>()=>(sqlite.prepare(sql).get(...values as (string|number|null)[])??null) as T|null,run:async()=>sqlite.prepare(sql).run(...values as (string|number|null)[])});

@@ -7,8 +7,8 @@ test('health reports P1 without exposing secret',async()=>{
  const response=await worker.fetch(req('/api/health',null,'GET'),{OPENAI_API_KEY:'test-secret'});
  const body=await response.json();assert.equal(body.status,'ok');assert.equal(body.api_key_configured,true);assert.equal(JSON.stringify(body).includes('test-secret'),false);
 });
-test('every requested stub returns cached sample data',async()=>{
- for(const [path,body] of Object.entries({'/api/intent':{text:'warm natural'},'/api/sell/detect':{},'/api/render':{bundle_id:'demo'}})){
+test('intent returns cached sample data',async()=>{
+ for(const [path,body] of Object.entries({'/api/intent':{text:'warm natural'}})){
   const response=await worker.fetch(req(path,body));assert.equal(response.status,200,path);assert.equal((await response.json()).demo,true,path);
  }
 });

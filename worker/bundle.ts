@@ -49,6 +49,8 @@ function roomFor(category:Category,rooms:BundleRoom[]):BundleRoom|undefined {
  const matches=(r:BundleRoom,re:RegExp)=>re.test(r.type.replaceAll('_',' ')+' '+r.name);
  const bedroom=eligible.find(r=>matches(r,/bedroom|master|main bed/i));
  const living=eligible.find(r=>matches(r,/living|lounge|studio/i));
+ if(category==='microwave')return eligible.find(r=>matches(r,/kitchen/i));
+ if(category==='washing_machine')return rooms.find(r=>positive(r.width_m)&&positive(r.length_m)&&matches(r,/laundry/i))??eligible.find(r=>matches(r,/kitchen/i));
  if(['bed','wardrobe','nightstands'].includes(category))return bedroom;
  if(category==='desk')return eligible.find(r=>matches(r,/study|office/i))??bedroom??living;
  if(category==='dining_set')return eligible.find(r=>matches(r,/dining/i))??living;
@@ -84,6 +86,9 @@ function layout(selected:Map<Category,CatalogItem>,rooms:Map<Category,BundleRoom
   if(category==='armchair'){x=0;y=room.length_m-d}
   if(category==='floor_lamp'){x=room.width_m-w;y=room.length_m-d}
   if(category==='rug')y=(room.length_m-d)/2;
+  if(category==='tv'){x=0;y=.05}
+  if(category==='microwave'){x=0;y=0}
+  if(category==='washing_machine'){x=room.width_m-w;y=room.length_m-d}
   if(x<-1e-9||y<-1e-9||x+w>room.width_m+1e-9||y+d>room.length_m+1e-9)return null;
   const p:Placement={item_id:item.id,room_id:room.id,floor:room.floor,x_m:Math.max(0,x),y_m:Math.max(0,y),rotation:category==='wardrobe'?90:0,width_m:w,depth_m:d,coordinate_system:'room_local'};
   // Rugs may sit beneath furniture; all other anchored footprints must not overlap.
@@ -160,17 +165,37 @@ async function explain(input:BundleInput,result:Solution,env:Env):Promise<{expla
   return {explanation:template.replace(/\{\{(\w+)\}\}/g,(_,k:string)=>replacements[k]),explanation_source:'model',explanation_model:body.model??model};
  }catch{return fallback}
 }
+export function resolveBundleAction(input:BundleInput,catalog:CatalogRecord[],action:unknown):BundleInput {
+ if(action===undefined)return input;
+ check(object(action),'Invalid bundle action.');
+ if(action.kind==='paste'){
+  check(typeof action.url==='string','Provide a Dubizzle listing link.');
+  let url:URL;try{url=new URL(action.url)}catch{throw new BundleError('Provide a valid Dubizzle URL.')}
+  check(url.protocol==='https:'&&(url.hostname==='dubizzle.com'||url.hostname.endsWith('.dubizzle.com')),'Use an HTTPS Dubizzle listing link.');
+  const canonical=(s:string)=>s.split(/[?#]/)[0].replace(/\/$/,'');
+  const item=catalog.find(i=>typeof i.listing_url==='string'&&canonical(i.listing_url)===canonical(url.href));
+  check(item?.category,'This link is not in the available catalog yet. Try a catalog listing link.');
+  return {...input,needed_categories:[...new Set([...input.needed_categories,item.category])],pins:{...input.pins,[item.category]:item.id}};
+ }
+ check(['cheaper','better','colour'].includes(String(action.kind))&&typeof action.item_id==='string','Invalid swap action.');
+ const current=catalog.find(i=>i.id===action.item_id);check(current?.category,'Item is no longer available.');
+ const candidates=catalog.filter(i=>i.category===current.category&&i.id!==current.id&&typeof i.retail_aed==='number').filter(i=>action.kind==='cheaper'?i.price_aed<current.price_aed:action.kind==='better'?Number(i.retail_aed)>Number(current.retail_aed):typeof i.color==='string'&&i.color!==current.color);
+ candidates.sort((a,b)=>action.kind==='better'?Number(b.retail_aed)-Number(a.retail_aed)||a.price_aed-b.price_aed:a.price_aed-b.price_aed||lexical(a.id,b.id));
+ for(const item of candidates){const trial={...input,pins:{...input.pins,[current.category]:item.id}};try{solveBundle(trial,catalog);return trial}catch(error){if(!(error instanceof BundleError))throw error}}
+ throw new BundleError(`No ${action.kind} alternative fits this bundle and budget.`,409);
+}
 export async function bundleRequest(request:Request,env:Env):Promise<Response> {
  try{
   let value:unknown;try{value=await request.json()}catch{throw new BundleError('Invalid JSON.')}
-  const input=parseBundleInput(value);
+  let input=parseBundleInput(value);
   if(!env.DB)throw new BundleError('D1 DB binding is not configured.',503);
-  const catalog=await loadCatalog(env.DB,input.needed_categories);
+  const catalog=await loadCatalog(env.DB,object(value)&&object(value.action)&&value.action.kind==='paste'?[...categories]:input.needed_categories);
+  input=resolveBundleAction(input,catalog,object(value)?value.action:undefined);
   const result=solveBundle(input,catalog);
   const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({input,result})));
   const id='bundle-'+Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('').slice(0,24);
   const explanation=await explain(input,result,env);
   if(explanation.explanation_source!=='model')result.warnings.push('Model explanation unavailable; showing the computed room and spending summary.');
-  return Response.json({id,...result,...explanation,demo:false},{headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+  return Response.json({id,...result,...explanation,pins:input.pins,needed_categories:input.needed_categories,demo:false},{headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
  }catch(error){return Response.json({detail:error instanceof BundleError?error.message:'Catalog database unavailable. Check migrations and retry.'},{status:error instanceof BundleError?error.status:503})}
 }

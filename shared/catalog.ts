@@ -1,13 +1,13 @@
-export const categories = ['bed','wardrobe','nightstands','sofa','tv_unit','coffee_table','dining_set','desk','armchair','rug','floor_lamp'] as const;
+export const categories = ['bed','wardrobe','nightstands','sofa','tv_unit','coffee_table','dining_set','desk','armchair','rug','floor_lamp','tv','microwave','washing_machine'] as const;
 export type Category = typeof categories[number];
 export const optionalDropOrder:Category[] = ['floor_lamp','rug','nightstands','armchair','dining_set','desk'];
 // Illustrative avoided-new-production factors per purchased listing, not measured emissions.
-export const co2Factors:Record<Category,number> = {bed:80,wardrobe:100,nightstands:15,sofa:90,tv_unit:35,coffee_table:20,dining_set:75,desk:30,armchair:40,rug:10,floor_lamp:5};
+export const co2Factors:Record<Category,number> = {bed:80,wardrobe:100,nightstands:15,sofa:90,tv_unit:35,coffee_table:20,dining_set:75,desk:30,armchair:40,rug:10,floor_lamp:5,tv:150,microwave:40,washing_machine:200};
 export type CatalogRecord = {id:string;title:string;category:Category|null;price_aed:number;retail_aed:number|null;width:number|null;depth:number|null;height:number|null;style_tags:string[];area:string;size_estimated:boolean;[key:string]:unknown};
 export type CatalogItem = CatalogRecord & {category:Category;retail_aed:number};
 export function categoryName(value:string):Category|null {
  const key=value.trim().toLowerCase().replace(/[ -]+/g,'_');
- const aliases:Record<string,Category>={tv:'tv_unit',tv_stand:'tv_unit',nightstand:'nightstands',bedside_table:'nightstands',dining:'dining_set',lamp:'floor_lamp'};
+ const aliases:Record<string,Category>={tv_stand:'tv_unit',television:'tv',washing_machines:'washing_machine',tv_unit:'tv_unit',nightstand:'nightstands',bedside_table:'nightstands',dining:'dining_set',lamp:'floor_lamp'};
  return categories.includes(key as Category)?key as Category:Object.hasOwn(aliases,key)?aliases[key]:null;
 }
 export function normalizeCatalog(rows:Record<string,unknown>[]):CatalogRecord[] {

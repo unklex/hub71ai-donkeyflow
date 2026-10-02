@@ -7,7 +7,7 @@ Furnish: Plan & brief → Rooms → What you need → Bundle → Order.
 Sell: Upload → What we found → Your lot.
 Workspace: left Plan/Moodboard/Render canvas, right controls. Responsive teal design, Bricolage Grotesque headings, IBM Plex Sans body, IBM Plex Mono numbers.
 
-Floor plans use live vision analysis and D1 caching. Furniture bundles use the D1 catalog and a deterministic TypeScript solver. The sell, style and render flows still return demo samples; no real orders or transactions are made.
+Floor plans use live vision analysis and D1 caching. Furniture bundles use the D1 catalog and a deterministic TypeScript solver. Video selling uses browser frame extraction and live vision detection; published lots are saved in D1. Room renders use the image API and R2 caching. Style interpretation and order booking remain previews.
 
 ## Build and verify
 Requires Node 24+ (native TypeScript execution) and pnpm.
@@ -24,8 +24,10 @@ GET /api/health
 POST /api/plan (JSON: plan_id, or multipart: file / floor_0 and optional floor_1)
 POST /api/bundle (JSON)
 POST /api/intent (JSON: text)
-POST /api/sell/detect (JSON or multipart)
-POST /api/render (JSON: bundle_id)
+POST /api/sell/detect (JSON: frames [{seen_at_s, image_url}])
+POST /api/sell/publish (JSON: mode, items)
+POST /api/render (JSON: bundle, room, style)
+GET /api/media/renders/{bundle_hash}.png
 
 Unknown APIs return 404; wrong methods 405; malformed JSON 422.
 Other API stubs use committed data/cache samples.
@@ -73,6 +75,12 @@ Choose catalogue plans from `data/plans.json`, mirrored from the collected root 
 Responses include the requested plan fields, `model`, `image_hash`, `cached`, `dimension_labels`, and `warnings`. D1 stores each successful result under a SHA-256 image hash, ordered by floor for multi-floor inputs, with model and prompt version in the cache key. Raw uploads are not stored. Optional `furniture: [{room_id, width_m, length_m}]` (JSON or a JSON-encoded multipart field) adds fit checks, allowing rotation. Checks are recalculated on cache hits, and furniture-specific warnings are not persisted in the shared image result. Living rooms below 12 m² or rooms that cannot fit their furniture receive `check size`.
 
 Tests mock the vision API and D1; live API quality and database deployment require configured credentials and bindings.
+
+## Video selling and rendering
+
+The browser decodes videos with video/canvas, samples at 0, 3, 6… seconds (maximum 20 frames), downsizes to 960 pixels and sends JPEG data URLs to detection. No ffmpeg and no whole-video upload. OpenAI receives only these frames. A strict vision schema returns movable furniture/appliances, a stable physical-object key and normalized crop boxes. Repeated views merge by object key; built-ins are excluded. Crops are created in the browser. Estimated retail × condition factors (like_new 0.45, good 0.35, fair 0.22) produce prices rounded to AED 10. Users edit prices and select included pieces. Publishing saves selected items, crop thumbnails, edited total, mode and 60% cash offer to sell_lots in D1. This records an offer/listing; no payout is processed.
+
+Render requests select items placed in the chosen living room and describe type, colour, material, style, dimensions and room size. Those details are sent to OpenAI's image-generation API. PNGs are stored in the RENDERS R2 binding. SHA-256 cache keys include normalized room/furniture/style data, prompt version and image model; changed prices or bundle ordering do not regenerate the same scene. Configure server-only OPENAI_API_KEY, optional SELL_VISION_MODEL (gpt-4.1-mini), and IMAGE_MODEL (gpt-image-1). The hosting manifest provisions DB and RENDERS; deployment applies the packaged Drizzle migration.
 
 ## Sites
 .openai/hosting.json identifies this Site. The Sites workflow builds, packages and pushes the exact source commit before deployment. Public access is requested by the user. No credentials are committed.
