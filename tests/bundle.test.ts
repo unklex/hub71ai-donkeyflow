@@ -103,6 +103,8 @@ test('small model only supplies prose with numeric placeholders; failing or fabr
  const a=await (await createWorker().fetch(req(),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(a.explanation_source,'model');assert.match(a.explanation,/6 × 7 m/);assert.ok(!a.explanation.includes('{{'));
  mock.mock.mockImplementation(async()=>Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({sentences:['Your room is 99 metres.','Spend 9999 AED.']})}]}]}));
  const b=await (await createWorker().fetch(req(),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(b.explanation_source,'deterministic_fallback');assert.deepEqual(b.items,a.items);assert.equal(b.id,a.id);
+ mock.mock.mockImplementation(async()=>Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({sentences:['These pieces suit {{ROOM_SIZES}}. Enjoy them.','Your {{SPEND}} uses {{TOTAL}} of {{BUDGET}}, leaving {{REMAINING}}. Buy today.']})}]}]}));
+ const verbose=await (await createWorker().fetch(req(),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(verbose.explanation_source,'deterministic_fallback');assert.equal(verbose.id,a.id);
  mock.mock.mockImplementation(async()=>Response.json({error:'secret'},{status:429}));const c=await (await createWorker().fetch(req(),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(c.explanation_source,'deterministic_fallback');assert.ok(!JSON.stringify(c).includes('secret'));
  sqlite.close();
 });
