@@ -1,6 +1,7 @@
 import {readFile,writeFile,mkdir,readdir,cp} from 'node:fs/promises';
 import {resolve,join,extname} from 'node:path';
 import {build} from 'vite';
+import {gitCommit} from './git-commit.ts';
 const assets:Record<string,{type:string;base64:string}>={};
 const mime:Record<string,string>={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.jpeg':'image/jpeg','.jpg':'image/jpeg','.webp':'image/webp','.json':'application/json'};
 async function walk(directory:string,prefix=''){
@@ -15,7 +16,7 @@ assets['/plans.json']={type:'application/json',base64:(await readFile('data/plan
 assets['/api/media/render.png']={type:'image/png',base64:(await readFile('data/cache/render.png')).toString('base64')};
 await mkdir('.sites-runtime',{recursive:true});
 await writeFile('.sites-runtime/entry.ts',"import {createWorker} from '../worker/index';\nexport default createWorker("+JSON.stringify(assets)+");\n");
-await build({configFile:false,build:{outDir:'dist/server',emptyOutDir:true,lib:{entry:resolve('.sites-runtime/entry.ts'),formats:['es'],fileName:()=>'index.js'},minify:true}});
+await build({configFile:false,define:{__BUILD_COMMIT__:JSON.stringify(gitCommit())},build:{outDir:'dist/server',emptyOutDir:true,lib:{entry:resolve('.sites-runtime/entry.ts'),formats:['es'],fileName:()=>'index.js'},minify:true}});
 await mkdir('dist/.openai',{recursive:true});
 await writeFile('dist/.openai/hosting.json',await readFile('.openai/hosting.json'));
 await cp('drizzle','dist/.openai/drizzle',{recursive:true});

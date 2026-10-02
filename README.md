@@ -20,6 +20,7 @@ pnpm run build
 pnpm run validate
 ```
 No localhost server is required for the Sites workflow. The build creates a self-contained ESM Worker at dist/server/index.js, including frontend assets and cached fixtures.
+Both Vite builds inject the current Git HEAD SHA at build time. The footer shows `build <short sha>` and GET `/api/health` includes `commit` with the full SHA alongside its health fields. Commit source changes before the production build so the deployed identifier matches the pushed commit; native TypeScript tests use `development` without build injection.
 
 ## Worker API
 GET /api/health

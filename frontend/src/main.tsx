@@ -10,6 +10,7 @@ import {extractFrames,cropItems} from './video';
 import {cashOffer,type DetectedItem,type Frame} from '../../shared/sell';
 import {OrderEditor} from './OrderEditor';
 import type {BundleIntent} from '../../worker/intent';
+import {buildCommit} from '../../shared/build';
 type BundleSnapshot={needs:Category[];pins:Partial<Record<Category,string>>;budget:number;style:Style|null;bundle:Bundle};
 type Style={tags:string[];palette:string[];summary:string;avoid:string[]};
 type Detected=DetectedItem;
@@ -130,7 +131,7 @@ function App(){
      <div className="panel-footer"><span>{busy?'Processing…':health?'API connected':'API unavailable'}</span><div>{step>0&&<button className="back" disabled={busy} onClick={()=>setStep(step-1)}>Back</button>}{step<steps.length-1&&<button className="primary" disabled={busy||!canVisit(step+1)} onClick={()=>void next()}>Continue</button>}</div></div>
     </section>
    </div>
-   <footer className="footer"><span>DonkeyFlow · Made for your next move.</span><span>Vision plan analysis · Review sizes before furnishing.</span></footer>
+   <footer className="footer"><span>DonkeyFlow · Made for your next move.</span><span>Vision plan analysis · Review sizes before furnishing.</span><span>build {buildCommit.slice(0,7)}</span></footer>
   </main>}
  </div>;
 }

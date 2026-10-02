@@ -2,6 +2,7 @@ import {spendValue} from './spend.ts';
 import {analysePlan,type D1Database} from './plan.ts';
 import {bundleRequest} from './bundle.ts';
 import {bundleIntent} from './intent.ts';
+import {buildCommit} from '../shared/build.ts';
 import style from '../data/cache/style.json' with { type: 'json' };
 import {detectSell,publishLot} from './sell.ts';
 import {renderRoom,renderMedia,type R2Bucket} from './render.ts';
@@ -22,7 +23,7 @@ export function createWorker(assets:Assets={}) {
      const response=await analysePlan(request,env,assets);
      response.headers.set('Cache-Control','no-store');response.headers.set('X-Content-Type-Options','nosniff');return response;
     }
-    if(path==='/api/health'){const limit_usd=spendValue(env.SPEND_LIMIT_USD,5);let spent_usd:number|null=null;try{if(env.DB)spent_usd=Number((await env.DB.prepare('SELECT COALESCE(SUM(COALESCE(actual_usd,est_usd)),0) AS spent_usd FROM api_spend').bind().first<{spent_usd:number}>())?.spent_usd??0)}catch{}return reply({spent_usd,limit_usd,spend_tracking:spent_usd===null?'unavailable':'ok',remaining_usd:spent_usd===null?null:Math.max(0,limit_usd-spent_usd),status:'ok',live_ai:!!env.OPENAI_API_KEY&&!!env.DB,runtime:'cloudflare-worker',api_key_configured:!!env.OPENAI_API_KEY,d1_configured:!!env.DB,r2_configured:!!env.RENDERS,plan_model:env.PLAN_VISION_MODEL||'gpt-6-astra',sell_model:env.SELL_VISION_MODEL||'gpt-4.1-mini',image_model:env.IMAGE_MODEL||'gpt-image-1'})};
+    if(path==='/api/health'){const limit_usd=spendValue(env.SPEND_LIMIT_USD,5);let spent_usd:number|null=null;try{if(env.DB)spent_usd=Number((await env.DB.prepare('SELECT COALESCE(SUM(COALESCE(actual_usd,est_usd)),0) AS spent_usd FROM api_spend').bind().first<{spent_usd:number}>())?.spent_usd??0)}catch{}return reply({commit:buildCommit,spent_usd,limit_usd,spend_tracking:spent_usd===null?'unavailable':'ok',remaining_usd:spent_usd===null?null:Math.max(0,limit_usd-spent_usd),status:'ok',live_ai:!!env.OPENAI_API_KEY&&!!env.DB,runtime:'cloudflare-worker',api_key_configured:!!env.OPENAI_API_KEY,d1_configured:!!env.DB,r2_configured:!!env.RENDERS,plan_model:env.PLAN_VISION_MODEL||'gpt-6-astra',sell_model:env.SELL_VISION_MODEL||'gpt-4.1-mini',image_model:env.IMAGE_MODEL||'gpt-image-1'})};
     if(path==='/api/bundle')return bundleRequest(request,env);
     if(path==='/api/bundle/intent')return bundleIntent(request,env);
     if(path==='/api/sell/detect')return detectSell(request,env);
