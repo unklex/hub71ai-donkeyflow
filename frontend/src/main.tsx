@@ -5,7 +5,7 @@ import './styles.css';
 import {FloorPlan,PlanPicker,RoomEditor} from './PlanEditor';
 import type {PlanResult as Plan} from '../../shared/plan';
 import type {Category} from '../../shared/catalog';
-import {BundleEditor,NeedsChecklist,Moodboard,defaultNeeds,type Bundle} from './BundleEditor';
+import {BundleEditor,NeedsChecklist,Moodboard,defaultNeeds,needGroups,type Bundle} from './BundleEditor';
 import {extractFrames,cropItems} from './video';
 import {cashOffer,type DetectedItem,type Frame} from '../../shared/sell';
 import {OrderEditor} from './OrderEditor';
@@ -43,10 +43,10 @@ function App(){
    const version=++sellVersion.current;setMessage('Reading your video…');
    const frames=await extractFrames(file,(done,total)=>{if(version===sellVersion.current)setMessage(`Extracting frame ${done} of ${total}…`)});
    if(version!==sellVersion.current)return;setVideoFrames(frames);setMessage(`Detecting furniture in ${frames.length} frames…`);
-   const result=await api<{items:Detected[]}>('/api/sell/detect',{frames});
+   const result=await api<{items:Detected[];skipped:number}>('/api/sell/detect',{frames});
    if(version!==sellVersion.current)return;
    const cropped=await cropItems(result.items,frames);if(version!==sellVersion.current)return;
-   setItems(cropped);setLotReady(false);setPublishedId('');setStep(1);setMessage(cropped.length?`Found ${cropped.length} pieces. Review the estimated sizes, condition and prices.`:'No movable furniture or appliances found. Try a clearer walkthrough.');
+   setItems(cropped);setLotReady(false);setPublishedId('');setStep(1);setMessage((cropped.length?`Found ${cropped.length} pieces. Review the estimated sizes, condition and prices.`:'No movable furniture or appliances found. Try a clearer walkthrough.')+(result.skipped?` ${result.skipped} items could not be read and were skipped.`:''));
   }else{const data=new FormData();data.append('file',file);setPlan(await api<Plan>('/api/plan',data))}
  })}
  function uploadButton(label:string,accept:string,kind:'plan'|'sell',Icon:typeof Upload){return <label className="upload-button"><Icon size={18}/><span>{label}</span><input type="file" accept={accept} disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file,kind);e.target.value=''}}/></label>}
@@ -65,7 +65,8 @@ function App(){
  function addCategory(category:Category){setNeeds(old=>old.includes(category)?old:[...old,category]);setPins(old=>{const next={...old};delete next[category];return next})}
  async function next(){if(mode==='furnish'&&step===2){await loadBundle();return}setStep(Math.min(step+1,steps.length-1))}
  function canVisit(index:number){return !busy&&(mode==='sell'?(index===0||items.some(i=>i.include)):(index===0||index<=2&&!!plan||index===3&&!!plan||index===4&&!!bundle?.items.length&&!error&&lastBundleRequest.current===JSON.stringify(bundleInput())))}
- const livingRoom=plan?.rooms.find(r=>r.furnish&&/living|lounge/i.test(r.type+' '+r.name)&&bundle?.items.some(i=>i.placement.room_id===r.id));
+ const missingSizes=needGroups(plan).filter(g=>g.categories.some(c=>needs.includes(c)&&pins[c]!=='remove')).map(g=>plan!.rooms.find(r=>r.id===g.id)!).filter(r=>!(r.width_m&&r.length_m)).map(r=>r.name);
+ const livingRoom=plan?.rooms.find(r=>r.furnish&&/living|lounge|studio/i.test(r.type+' '+r.name)&&bundle?.items.some(i=>i.placement.room_id===r.id));
  useEffect(()=>{renderVersion.current++;setRender(null);setRenderError('');setRenderBusy(false)},[bundle,plan,style]);
  async function loadRender(){
   if(!bundle||!livingRoom)return;const version=++renderVersion.current;setRenderBusy(true);setRenderError('');
@@ -101,8 +102,8 @@ function App(){
     <section className="control-panel" aria-label={steps[step]} aria-busy={busy}>
      <div className="panel-heading"><p className="eyebrow">STEP {String(step+1).padStart(2,'0')} / {String(steps.length).padStart(2,'0')}</p><h2>{steps[step]}</h2><p>{mode==='furnish'?['Start with your space. We’ll help fill it.','Get to know each room.','Choose the essentials for your new home.','A first look at your furniture bundle.','Everything together, in one delivery.'][step]:['A short walkthrough is a good start.','Review your detected furniture and prices.','Bring your pieces together in one lot.'][step]}</p></div>
      <div className="controls">
-      {mode==='furnish'&&step===0&&<><PlanPicker busy={busy} onAnalyse={analyse}/><label className="field">What feels like home?<textarea rows={3} value={brief} onChange={e=>setBrief(e.target.value)}/></label><button className="text-button" disabled={busy} onClick={()=>void run(async()=>{setStyle((await api<{style:Style}>('/api/intent',{text:brief})).style);setTab('Moodboard');setMessage('Sample style loaded. Your brief is not analysed in P1.')})}><Palette size={15}/>Preview style</button>{style&&<div className="style-tags">{style.tags.map(t=><span key={t}>{t}</span>)}</div>}<Notice>Upload each floor separately or crop both floors from one image. Missing dimensions need your input.</Notice></>}
-      {mode==='furnish'&&step===1&&<>{plan&&<RoomEditor plan={plan} onChange={value=>{setPlan(value);setNeeds(defaultNeeds(value));setPins({});setBundle(null)}}/>}</>}
+      {mode==='furnish'&&step===0&&<><PlanPicker busy={busy} onAnalyse={analyse}/><label className="field">What feels like home?<textarea rows={3} value={brief} onChange={e=>setBrief(e.target.value)}/></label><button className="text-button" disabled={busy} onClick={()=>void run(async()=>{setStyle((await api<{style:Style}>('/api/intent',{text:brief})).style);setTab('Moodboard');setMessage('Style preview loaded.')})}><Palette size={15}/>Preview style</button>{style&&<div className="style-tags">{style.tags.map(t=><span key={t}>{t}</span>)}</div>}<Notice>Upload each floor separately or crop both floors from one image. Missing dimensions need your input.</Notice></>}
+      {mode==='furnish'&&step===1&&<>{plan&&<RoomEditor plan={plan} onChange={value=>{const furnished=(p:Plan|null)=>JSON.stringify(p?.rooms.filter(r=>r.furnish).map(r=>r.id).sort());if(furnished(plan)!==furnished(value)){setNeeds(defaultNeeds(value));setPins({})}setPlan(value);setBundle(null)}}/>}{missingSizes.length>0&&<Notice>Enter width and length for: {missingSizes.join(', ')}.</Notice>}</>}
       {mode==='furnish'&&step===2&&<NeedsChecklist plan={plan} needs={needs} onChange={value=>{setNeeds(value);setPins(old=>Object.fromEntries(Object.entries(old).filter(([category])=>value.includes(category as Category))))}}/>}
       {mode==='furnish'&&step===3&&<>{bundle?<><BundleEditor bundle={bundle} needs={needs} budget={budget} busy={busy} onBudget={setBudget} onAction={bundleAction} onRemove={removeCategory} onAdd={addCategory} onMessage={setMessage}/><Notice>No items are reserved. Confirm listing availability and measurements before purchase.</Notice></>:<div className="empty small"><Sofa size={38}/><p>Build a bundle for your rooms.</p><button className="secondary" disabled={busy} onClick={()=>void loadBundle()}>Build bundle</button></div>}</>}
       {mode==='furnish'&&step===4&&bundle?.items.length&&<OrderEditor key={bundle.id} bundle={bundle} propertyKind={plan?.property_kind??'tower'}/>}

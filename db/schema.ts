@@ -10,3 +10,5 @@ export const catalogImports=sqliteTable('catalog_imports',{version:text('version
 export const sellLots=sqliteTable('sell_lots',{
  id:text('id').primaryKey(),mode:text('mode').notNull(),totalAed:real('total_aed').notNull(),cashOfferAed:real('cash_offer_aed').notNull(),lotJson:text('lot_json').notNull(),createdAt:text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 },t=>[check('sell_lots_mode',sql`${t.mode} in ('move_out_lot','instant_cash')`),check('sell_lots_total',sql`${t.totalAed} >= 0`),check('sell_lots_json',sql`json_valid(${t.lotJson})`)]);
+
+export const apiSpend=sqliteTable('api_spend',{id:integer('id').primaryKey({autoIncrement:true}),endpoint:text('endpoint').notNull(),model:text('model').notNull(),estUsd:real('est_usd').notNull(),actualUsd:real('actual_usd'),createdAt:text('created_at').default(sql`CURRENT_TIMESTAMP`)});

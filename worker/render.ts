@@ -1,3 +1,4 @@
+import {reserveSpend,spendValue} from './spend.ts';
 import type {Env} from './index.ts';
 import {ApiError,apiHandler,readJson,requireValue as check,isObject,positive,hash} from './api.ts';
 export interface R2Object {body:ReadableStream<Uint8Array>;httpEtag?:string}
@@ -5,7 +6,7 @@ export interface R2Bucket {get(key:string):Promise<R2Object|null>;head(key:strin
 const text=(v:unknown,fallback:string)=>typeof v==='string'&&v.trim()?v.trim().slice(0,300):fallback;
 export function renderSpec(input:Record<string,unknown>){
  check(isObject(input.bundle)&&Array.isArray(input.bundle.items)&&input.bundle.items.length<=100,'Provide your furniture bundle.');
- check(isObject(input.room)&&typeof input.room.id==='string'&&/living|lounge/i.test(String(input.room.type)+' '+String(input.room.name)),'Select a living room.');
+ check(isObject(input.room)&&typeof input.room.id==='string'&&/living|lounge|studio/i.test(String(input.room.type)+' '+String(input.room.name)),'Select a living room.');
  check(positive(input.room.width_m)&&positive(input.room.length_m)&&input.room.width_m<=100&&input.room.length_m<=100,'Enter the living-room size.');
  const roomId=input.room.id;
  const items=input.bundle.items.filter(v=>isObject(v)&&isObject(v.placement)&&v.placement.room_id===roomId).map(v=>{
@@ -27,6 +28,7 @@ export async function renderRoom(request:Request,env:Env){return apiHandler(asyn
  let operation=pending.get(bundleHash);const reused=!!operation;
  if(!operation){const bucket=env.RENDERS;
   operation=(async()=>{
+   await reserveSpend(env,'render',model,spendValue(env.COST_RENDER_USD,.25));
    const result=await fetch('https://api.openai.com/v1/images/generations',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},signal:AbortSignal.timeout(240000),body:JSON.stringify({model,prompt:renderPrompt(spec),n:1,size:'1536x1024',quality:'medium',output_format:'png'})});
    if(!result.ok)throw new ApiError(`Room rendering failed (${result.status}). Please retry.`,502);
    const data=await result.json() as {data?:{b64_json?:string}[]},encoded=data.data?.[0]?.b64_json;check(encoded&&encoded.length<=40*1024*1024,'Image model returned no usable PNG.',502);

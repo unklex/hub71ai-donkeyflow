@@ -10,6 +10,22 @@ import snapshot from '../data/catalog.json' with {type:'json'};
 const rooms=[{id:'living',type:'living',name:'Living',floor:0,width_m:6,length_m:7},{id:'bedroom',type:'bedroom',name:'Bedroom',floor:1,width_m:5,length_m:5},{id:'study',type:'study',name:'Study',floor:1,width_m:3.125,length_m:3}];
 const input=(needed_categories:Category[],budget_aed=1000,pins:BundleInput['pins']={}):BundleInput=>({rooms,needed_categories,style:[],budget_aed,pins});
 const item=(id:string,category:Category,price_aed=100,retail_aed=200,width=.5,depth=.5):CatalogItem=>({id,title:id,category,price_aed,retail_aed,width,depth,height:.5,area:'Abu Dhabi',style_tags:[],size_estimated:false});
+test('dependent pieces are omitted before layout without dropping unrelated optionals',()=>{
+ const catalog=[item('s','sofa'),item('c','coffee_table'),item('a','armchair'),item('n','nightstands')];
+ const result=solveBundle(input(['sofa','coffee_table','armchair'],1000,{sofa:'remove'}),catalog);assert.deepEqual(result.omitted,[{category:'sofa',reason:'removed by pin'},{category:'coffee_table',reason:'needs a sofa'}]);assert.equal(result.items[0].category,'armchair');
+ assert.throws(()=>solveBundle(input(['sofa','coffee_table'],1000,{sofa:'remove',coffee_table:'c'}),catalog),e=>e instanceof Error&&e.message==='A coffee table needs a sofa in the bundle.'&&'status' in e&&e.status===409);
+ assert.deepEqual(solveBundle(input(['nightstands']),catalog).omitted,[{category:'nightstands',reason:'needs a bed'}]);
+});
+test('only target rooms need sizes and measured eligible rooms are preferred',()=>{
+ const parsed=parseBundleInput({...input(['sofa','bed']),rooms:[...rooms,{id:'k',type:'kitchen',name:'Kitchen',furnish:true,width_m:null,length_m:null},{id:'m',type:'maid',name:'Maid room',width_m:null,length_m:null}]});assert.equal(solveBundle(parsed,[item('s','sofa'),item('b','bed')]).items.length,2);
+ const req=parseBundleInput({...input(['desk']),rooms:[{...rooms[2],width_m:null},rooms[0]]});assert.equal(solveBundle(req,[item('d','desk')]).placements[0].room_id,'living');
+ const living=parseBundleInput({...input(['sofa']),rooms:[{...rooms[0],width_m:null},{...rooms[0],id:'second'}]});assert.equal(solveBundle(living,[item('s','sofa')]).placements[0].room_id,'second');
+});
+test('bundle succeeds with computed explanation when spend is capped',async t=>{
+ const {db,sqlite}=database();sqlite.exec(await readFile(new URL('../migrations/0002_catalog.sql',import.meta.url),'utf8'));sqlite.exec(await readFile(new URL('../migrations/0003_api_spend.sql',import.meta.url),'utf8'));
+ const mock=t.mock.method(globalThis,'fetch',async()=>{throw new Error('Fetch must not run')});const response=await createWorker().fetch(new Request('https://test/api/bundle',{method:'POST',body:JSON.stringify(input(['sofa'],3123))}),{DB:db,OPENAI_API_KEY:'test',SPEND_LIMIT_USD:'0'});
+ assert.equal(response.status,200);assert.equal((await response.json()).explanation_source,'deterministic_fallback');assert.equal(mock.mock.callCount(),0);sqlite.close();
+});
 test('swaps pin a fitting alternative and reject impossible changes',()=>{
  const current={...item('current','sofa',200,400),color:'grey'};
  const cheap={...item('cheap','sofa',100,200),color:'grey'};
@@ -99,7 +115,7 @@ test('anchor collisions reject required sets and prevent invalid upgrades',()=>{
 });
 test('validation handles unknown sizes, aliases, malformed pins, nonfinite budget, and duplicates',()=>{
  assert.throws(()=>parseBundleInput({...input(['sofa']),budget_aed:NaN}),/budget_aed/);
- assert.throws(()=>parseBundleInput({...input(['sofa']),rooms:[{...rooms[0],width_m:null}]}),/Enter real/);
+ assert.throws(()=>solveBundle(parseBundleInput({...input(['sofa']),rooms:[{...rooms[0],width_m:null}]}),[item('s','sofa')]),/Enter the width and length for Living/);
  assert.throws(()=>parseBundleInput({...input(['sofa']),needed_categories:['sofa','sofa']}),/unique/);
  assert.throws(()=>parseBundleInput({...input(['sofa']),pins:{bed:'id'}}),/must be requested/);
  assert.throws(()=>parseBundleInput({...input(['sofa']),style:[1]}),/style/);
@@ -118,19 +134,21 @@ test('D1 schema imports all 400 rows idempotently, uses the index, and serves li
  assert.equal(a.co2_is_estimate,true);assert.equal(a.total_aed,a.items.reduce((s:number,i:any)=>s+i.price_aed,0));assert.equal(a.co2_kg,a.items.reduce((s:number,i:any)=>s+i.co2_kg,0));
  sqlite.close();
 });
-test('small model only supplies prose with numeric placeholders; failing or fabricated output leaves results intact',async t=>{
+test('small model uses numeric placeholders and repeated bundles reuse the explanation',async t=>{
  const {db,sqlite}=database();sqlite.exec(await readFile(new URL('../migrations/0002_catalog.sql',import.meta.url),'utf8'));
- const req=()=>new Request('https://example.test/api/bundle',{method:'POST',body:JSON.stringify(input(['sofa'],3000))});
+ sqlite.exec(await readFile(new URL('../migrations/0003_api_spend.sql',import.meta.url),'utf8'));
+ const req=(budget=3000)=>new Request('https://example.test/api/bundle',{method:'POST',body:JSON.stringify(input(['sofa'],budget))});
  const mock=t.mock.method(globalThis,'fetch',async (_url:unknown,init:RequestInit)=>{
   const payload=JSON.parse(String(init.body));assert.equal(payload.model,'gpt-4.1-mini');assert.equal(payload.store,false);assert.equal(payload.text.format.strict,true);
   return Response.json({status:'completed',model:'small-model',output:[{content:[{type:'output_text',text:JSON.stringify({sentences:['These pieces suit {{ROOM_SIZES}}.','Your {{SPEND}} uses {{TOTAL}} of {{BUDGET}}, leaving {{REMAINING}}.']})}]}]});
  });
  const a=await (await createWorker().fetch(req(),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(a.explanation_source,'model');assert.match(a.explanation,/6 × 7 m/);assert.ok(!a.explanation.includes('{{'));
  mock.mock.mockImplementation(async()=>Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({sentences:['Your room is 99 metres.','Spend 9999 AED.']})}]}]}));
- const b=await (await createWorker().fetch(req(),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(b.explanation_source,'deterministic_fallback');assert.deepEqual(b.items,a.items);assert.equal(b.id,a.id);
+ const repeated=await (await createWorker().fetch(req(),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(repeated.explanation_source,'model');assert.equal(mock.mock.callCount(),1);
+ const b=await (await createWorker().fetch(req(3001),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(b.explanation_source,'deterministic_fallback');assert.deepEqual(b.items,a.items);assert.notEqual(b.id,a.id);
  mock.mock.mockImplementation(async()=>Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({sentences:['These pieces suit {{ROOM_SIZES}}. Enjoy them.','Your {{SPEND}} uses {{TOTAL}} of {{BUDGET}}, leaving {{REMAINING}}. Buy today.']})}]}]}));
- const verbose=await (await createWorker().fetch(req(),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(verbose.explanation_source,'deterministic_fallback');assert.equal(verbose.id,a.id);
- mock.mock.mockImplementation(async()=>Response.json({error:'secret'},{status:429}));const c=await (await createWorker().fetch(req(),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(c.explanation_source,'deterministic_fallback');assert.ok(!JSON.stringify(c).includes('secret'));
+ const verbose=await (await createWorker().fetch(req(3002),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(verbose.explanation_source,'deterministic_fallback');assert.notEqual(verbose.id,a.id);
+ mock.mock.mockImplementation(async()=>Response.json({error:'secret'},{status:429}));const c=await (await createWorker().fetch(req(3003),{DB:db,OPENAI_API_KEY:'secret'})).json();assert.equal(c.explanation_source,'deterministic_fallback');assert.ok(!JSON.stringify(c).includes('secret'));
  sqlite.close();
 });
 test('normalization does not guess footprint or misclassify tables and office chairs',()=>{

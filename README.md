@@ -54,7 +54,7 @@ DEMO_MODE controls the remaining demo endpoints; plan and bundle endpoints alway
 }
 ```
 
-`length_m` or `depth_m` is the room depth. Missing measurements on furnished rooms return 422. Supported categories: bed, wardrobe, nightstands, sofa, tv_unit, coffee_table, dining_set, desk, armchair, rug, floor_lamp. One listing is selected per requested category across the plan; the first suitable room in plan order is used, with desks preferring study/office. Include excluded rooms in the input so a walk-in closet can suppress wardrobe selection. Catalog categories are mapped conservatively: console/dining-only tables and office/dining chairs are not sold as coffee tables or armchairs. Lamps, rugs and standalone nightstands currently have no listings in the supplied collection.
+`length_m` or `depth_m` is the room depth. Missing measurements return 422 only for rooms selected for requested furniture; measured eligible rooms are preferred. Supported categories: bed, wardrobe, nightstands, sofa, tv_unit, coffee_table, dining_set, desk, armchair, rug, floor_lamp. One listing is selected per requested category across the plan; the first suitable room in plan order is used, with desks preferring study/office. Include excluded rooms in the input so a walk-in closet can suppress wardrobe selection. Catalog categories are mapped conservatively: console/dining-only tables and office/dining chairs are not sold as coffee tables or armchairs. Lamps, rugs and standalone nightstands currently have no listings in the supplied collection.
 
 Candidates must have known dimensions and retail benchmarks. Each oriented footprint must be within room width and depth minus 0.6 m; wardrobes rotate 90° on the right wall. Start with cheapest candidates, drop unpinned optionals in floor_lamp → rug → nightstands → armchair → dining_set → desk order when over budget, then repeatedly choose the feasible upgrade with the greatest incremental retail/price ratio. Free retail improvements rank first; style matches and item IDs break ties deterministically. Monetary comparisons use integer fils. Pins are never substituted, upgraded or dropped for budget; invalid pins return 422. An unaffordable required/pinned set returns 409, with its minimum cost.
 
@@ -86,3 +86,16 @@ Render requests select items placed in the chosen living room and describe type,
 
 ## Sites
 .openai/hosting.json identifies this Site. The Sites workflow builds, packages and pushes the exact source commit before deployment. Public access is requested by the user. No credentials are committed.
+
+## AI spend cap
+
+Set these optional Worker environment variables in Site settings (defaults shown):
+```env
+PLAN_REASONING_EFFORT=high
+SPEND_LIMIT_USD=5
+COST_PLAN_CALL_USD=0.50
+COST_DETECT_USD=0.15
+COST_RENDER_USD=0.25
+COST_EXPLAIN_USD=0.01
+```
+`PLAN_REASONING_EFFORT=none` or any `gpt-4` plan model omits reasoning. Otherwise effort defaults to high. Each of the two plan passes reserves USD 0.50. Every live AI call atomically reserves its conservative estimate in D1; missing DB or unavailable spend accounting refuses the call. Estimates remain charged when actual dollar cost is unavailable, including failed calls. These estimates bound reserved spend, not provider billing; set estimates conservatively for your models. Saved plan/render results remain available at the cap; bundle explanations fall back to computed facts and are cached per stable bundle ID in the Worker isolate. Health reports spend, limit and remaining USD (null when accounting is unavailable).

@@ -1,3 +1,4 @@
+import {spendDatabase} from './spend-db.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {PDFDocument} from 'pdf-lib';
@@ -7,9 +8,18 @@ import {checkPlan,excludedRoom,type Plan,type Room} from '../shared/plan.ts';
 const png=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64'));
 const room:Room={id:'living',type:'living',name:'Living',floor:0,width_m:3.125,length_m:3,x_m:0,y_m:0,confidence:.9,furnish:true};
 const plan:Plan={property_kind:'apartment',floors:1,bedrooms:0,dims_source:'printed',total_area_sqm:null,rooms:[room,{...room,id:'wc',type:'wc',name:'WC',width_m:null,length_m:null,x_m:null,y_m:null}]};
-function database(){const rows=new Map<string,string>();const db:D1Database={prepare:()=>({bind:(...values:unknown[])=>({first:async<T>()=>(rows.has(String(values[0]))?{result_json:rows.get(String(values[0]))}:null) as T|null,run:async()=>{rows.set(String(values[0]),String(values[3]));return {success:true}}})})};return {db,rows}}
+function database(){const spend=spendDatabase();const rows=new Map<string,string>();const db:D1Database={prepare:(sql:string)=>sql.includes('api_spend')?spend.prepare(sql):({bind:(...values:unknown[])=>({first:async<T>()=>(rows.has(String(values[0]))?{result_json:rows.get(String(values[0]))}:null) as T|null,run:async()=>{rows.set(String(values[0]),String(values[3]));return {success:true}}})})};return {db,rows}}
 function request(files:Blob[]=[new Blob([png],{type:'image/png'})],furniture?:unknown){const form=new FormData();files.forEach((f,i)=>form.append(`floor_${i}`,f,`floor-${i}`));if(furniture)form.append('furniture',JSON.stringify(furniture));return new Request('https://example.test/api/plan',{method:'POST',body:form})}
 const response=(value:unknown)=>Response.json({status:'completed',model:'gpt-6-astra-test',output:[{content:[{type:'output_text',text:JSON.stringify(value&&typeof value==='object'&&'labels' in value?{total_area_sqm:null,...value}:value)}]}]});
+test('two plan calls exhaust USD 1; the third is refused without fetch, while cache hits work',async t=>{
+ const {db}=database();let calls=0;const mock=t.mock.method(globalThis,'fetch',async()=>response(++calls===1?{labels:[]}:structuredClone(plan)));const worker=createWorker(),env={DB:db,OPENAI_API_KEY:'test',SPEND_LIMIT_USD:'1',COST_PLAN_CALL_USD:'.50'};
+ assert.equal((await worker.fetch(request(),env)).status,200);assert.equal(calls,2);const cached=await worker.fetch(request(),env);assert.equal(cached.status,200);assert.equal((await cached.json()).cached,true);
+ const refused=await worker.fetch(request(),{...env,PLAN_VISION_MODEL:'another-model'});assert.equal(refused.status,429);assert.equal((await refused.json()).detail,'Demo AI budget reached. Showing saved results only.');assert.equal(mock.mock.callCount(),2);
+ const health=await (await worker.fetch(new Request('https://test/api/health'),env)).json();assert.equal(health.spent_usd,1);assert.equal(health.remaining_usd,0);
+});
+test('gpt-4 and explicit none omit reasoning; other models default to high',async t=>{
+ for(const options of [{PLAN_VISION_MODEL:'gpt-4.1'},{PLAN_REASONING_EFFORT:'none'},{}]){const {db}=database();let calls=0;t.mock.method(globalThis,'fetch',async(_url:unknown,init:RequestInit)=>{const body=JSON.parse(String(init.body));assert.deepEqual(body.reasoning,Object.keys(options).length?undefined:{effort:'high'});return response(++calls===1?{labels:[]}:structuredClone(plan))});assert.equal((await createWorker().fetch(request(),{DB:db,OPENAI_API_KEY:'test',...options})).status,200)}
+});
 test('two strict high-detail passes preserve sizes, exclude WC, cache by image hash, and recalculate furniture checks',async t=>{
  const {db,rows}=database(),calls:Record<string,any>[]=[];
  t.mock.method(globalThis,'fetch',async (_url:unknown,init:RequestInit)=>{calls.push(JSON.parse(String(init.body)));return response(calls.length===1?{labels:[{text:'3.125 × 3.000 m',room_hint:'Living',floor:0,width_m:3.125,length_m:3}]}:structuredClone(plan))});

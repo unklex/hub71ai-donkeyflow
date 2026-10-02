@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {createWorker} from '../worker/index.ts';
 const worker=createWorker({'/index.html':{type:'text/html',base64:Buffer.from('<h1>DonkeyFlow</h1>').toString('base64')}});
 const req=(path:string,body:unknown={},method='POST')=>new Request('https://example.test'+path,{method,headers:{'Content-Type':'application/json'},...(method==='GET'?{}:{body:JSON.stringify(body)})});
-test('health reports P1 without exposing secret',async()=>{
+test('health reports spend without exposing secret',async()=>{
  const response=await worker.fetch(req('/api/health',null,'GET'),{OPENAI_API_KEY:'test-secret'});
- const body=await response.json();assert.equal(body.status,'ok');assert.equal(body.api_key_configured,true);assert.equal(JSON.stringify(body).includes('test-secret'),false);
+ const body=await response.json();assert.equal(body.status,'ok');assert.equal(body.limit_usd,5);assert.equal(body.spent_usd,null);assert.equal(body.stage,undefined);assert.equal(response.headers.has('X-DonkeyFlow-Stage'),false);assert.equal(body.api_key_configured,true);assert.equal(JSON.stringify(body).includes('test-secret'),false);
 });
 test('intent returns cached sample data',async()=>{
  for(const [path,body] of Object.entries({'/api/intent':{text:'warm natural'}})){

@@ -27,3 +27,5 @@ export function normalizeCatalog(rows:Record<string,unknown>[]):CatalogRecord[] 
   return {...row,id,title,source_category:source,category:category??null,price_aed:row.price_aed,retail_aed:retail,width:metres(row.width_cm),depth:metres(row.depth_cm),height:metres(row.height_cm),style_tags:Array.isArray(row.style_tags)?row.style_tags.filter((s):s is string=>typeof s==='string'):[],area:String(row.area??''),size_estimated:row.size_source!=='printed'&&row.size_source!=='measured',catalog_category:category??null};
  });
 }
+
+export const availableCategories:Category[]=['sofa','tv_unit','coffee_table','armchair','dining_set','bed','wardrobe','desk'];

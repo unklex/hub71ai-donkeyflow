@@ -24,10 +24,10 @@ test('preview draws separate floors to scale and keeps unknown sizes out of geom
 test('picker offers the catalogue and floor upload controls',()=>{
  const html=renderToStaticMarkup(React.createElement(PlanPicker,{busy:false,onAnalyse:async()=>{}}));assert.match(html,/Yas Acres/);assert.match(html,/Upload floor plan/);assert.match(html,/crop separately/);assert.match(html,/application\/pdf/);
 });
-test('checklist derives room groups from the plan and exposes appliances',()=>{
+test('checklist derives room groups from the plan and hides unavailable categories',()=>{
  const needs=defaultNeeds(plan);assert.ok(needs.includes('sofa')&&needs.includes('bed'));assert.ok(!needs.includes('washing_machine'));
  const html=renderToStaticMarkup(React.createElement(NeedsChecklist,{plan,needs,onChange:()=>{}}));
- assert.match(html,/<legend>Living · Floor 1<\/legend>/);assert.match(html,/<legend>Bedroom · Floor 2<\/legend>/);assert.match(html,/<legend>Appliances<\/legend>/);assert.match(html,/Microwave/);assert.match(html,/Washing machine/);assert.doesNotMatch(html,/<legend>Bathroom/);
+ assert.match(html,/<legend>Living · Floor 1<\/legend>/);assert.match(html,/<legend>Bedroom · Floor 2<\/legend>/);assert.doesNotMatch(html,/Appliances|Microwave|Washing machine|Nightstands|Floor lamp|Rug/);assert.doesNotMatch(html,/<legend>Bathroom/);
 });
 test('furniture geometry uses room-local metre coordinates on its own floor',()=>{
  const furniture=[{id:'bed',title:'Test bed',size_estimated:true,placement:{room_id:'upper',x_m:1,y_m:.25,width_m:2,depth_m:1.5}}];
