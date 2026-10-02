@@ -37,7 +37,7 @@ function App(){
  async function run(action:()=>Promise<void>){setBusy(true);setError('');setMessage('');try{await action()}catch(e){setError(e instanceof Error?e.message:'Something went wrong. Please retry.');setMessage('')}finally{setBusy(false)}}
  useEffect(()=>{api<{status:string}>('/api/health').then(h=>setHealth(h.status==='ok')).catch(()=>setHealth(false))},[]);
  function choose(value:'furnish'|'sell'){sellVersion.current++;setMode(value);setStep(0);setMessage('');setError('');window.scrollTo({top:0,behavior:'instant'})}
- async function analyse(body:object|FormData){await run(async()=>{const result=await api<Plan>('/api/plan',body);setPlan(result);setNeeds(defaultNeeds(result));setPins({});setBundle(null);setStep(1);setTab('Plan');setMessage(`Plan analysed with ${result.model}${result.cached?' · saved result':''}. Review dimensions before continuing.`)})}
+ async function analyse(body:object|FormData){await run(async()=>{const result=await api<Plan>('/api/plan',body);setPlan(result);setNeeds(defaultNeeds(result));setPins({});setBundle(null);setStep(1);setTab('Plan');setMessage(result.model==='fallback'?'AI analysis unavailable. Loaded typical room sizes for this plan. Review them before continuing.':`Plan analysed with ${result.model}${result.cached?' · saved result':''}. Review dimensions before continuing.`)})}
  async function upload(file:File,kind:'plan'|'sell'){await run(async()=>{
   if(kind==='sell'){
    const version=++sellVersion.current;setMessage('Reading your video…');

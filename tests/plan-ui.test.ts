@@ -18,6 +18,11 @@ const plan:PlanResult={property_kind:'townhouse',floors:2,bedrooms:1,dims_source
 test('editor preserves exact values, highlights unknown sizes and places excluded spaces last',()=>{
  const html=renderToStaticMarkup(React.createElement(RoomEditor,{plan,onChange:()=>{}}));assert.match(html,/value="3.125"/);assert.match(html,/Enter size/);assert.match(html,/unknown-size/);assert.ok(html.indexOf('Living')<html.indexOf('Bathroom'));assert.match(html,/excluded-room/);assert.match(html,/Include furniture/);assert.match(html,/check size/);assert.match(html,/test-model/);
 });
+test('estimated sizes are labelled in placed and unplaced previews and editable room inputs',()=>{
+ const estimated={...plan,dims_source:'estimated',rooms:plan.rooms.map(r=>r.id==='living'?{...r,width_m:4.2,length_m:3.6}:r.id==='upper'?{...r,x_m:null,y_m:null,width_m:4.2,length_m:3.6}:r),warnings:[{room_id:'living',message:'check size',reason:'Typical size used: no printed dimensions. Confirm before buying.'}]} as PlanResult;
+ const editor=renderToStaticMarkup(React.createElement(RoomEditor,{plan:estimated,onChange:()=>{}}));assert.match(editor,/≈ 4.2 × 3.6 m/);assert.match(editor,/<small>estimated<\/small>/);assert.match(editor,/value="4.2"/);assert.match(editor,/value="3.6"/);assert.match(editor,/Typical size used/);assert.doesNotMatch(editor,/disabled|readonly/i);
+ const preview=renderToStaticMarkup(React.createElement(FloorPlan,{plan:estimated}));assert.equal((preview.match(/≈ 4.2 × 3.6 m/g)||[]).length,2);assert.match(preview,/Estimated rooms to scale/);const printed=renderToStaticMarkup(React.createElement(FloorPlan,{plan}));assert.doesNotMatch(printed,/≈|estimated/);
+});
 test('preview draws separate floors to scale and keeps unknown sizes out of geometry',()=>{
  const html=renderToStaticMarkup(React.createElement(FloorPlan,{plan}));assert.equal((html.match(/<svg/g)||[]).length,2);assert.match(html,/width="3.125"/);assert.match(html,/Floor 2/);assert.match(html,/Enter size/);assert.equal(html.includes('NaN'),false);
 });

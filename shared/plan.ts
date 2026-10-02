@@ -24,3 +24,8 @@ export function checkPlan(plan:Plan, furniture:Furniture[]=[]):Warning[] {
  }
  return warnings;
 }
+
+export function defaultRoomSize(room:Pick<Room,'type'|'name'>):[number,number]|null {
+ const value=(room.type+' '+room.name).replace(/[^a-z0-9]+/gi,' ');
+ return /\b(master|main bed(?:room)?|m bedroom)\b/i.test(value)?[4.5,4]:/bedroom/i.test(value)?[4,3.5]:/living|lounge|studio/i.test(value)?[6,4.5]:/dining/i.test(value)?[4,3.5]:/study|office/i.test(value)?[3,2.8]:/kitchen/i.test(value)?[3.5,3]:/maid/i.test(value)?[2.5,2.2]:null;
+}
