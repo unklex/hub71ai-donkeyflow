@@ -73,7 +73,7 @@ function App(){
 
  const total=items.filter(i=>i.include).reduce((sum,i)=>sum+i.suggested_price_aed,0);
  return <div className="app">
-  <header className="header"><button className="brand" onClick={()=>{sellVersion.current++;setMode(null);setError('')}} aria-label="DonkeyFlow home"><span className="brand-mark"><Layers size={22}/></span>donkey<span>flow</span><span className="period">.</span></button><div className="header-meta"><span className="place"><MapPin size={14}/>Abu Dhabi</span><span className="demo-badge">VIDEO SELL & ROOM RENDER</span></div></header>
+  <header className="header"><button className="brand" onClick={()=>{sellVersion.current++;setMode(null);setError('')}} aria-label="DonkeyFlow home"><span className="brand-mark"><Layers size={22}/></span>donkey<span>flow</span><span className="period">.</span></button><div className="header-meta"><span className="place"><MapPin size={14}/>Abu Dhabi</span></div></header>
   {!mode?<main className="landing">
    <div className="landing-title"><p className="eyebrow">A NEW HOME FOR GOOD FURNITURE</p><h1>Your next move,<br/><span>a little lighter.</span></h1><p>Moving in or moving on? Let’s start with your home.</p></div>
    <div className="choice-grid">
