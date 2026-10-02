@@ -21,13 +21,28 @@ test('editor preserves exact values, highlights unknown sizes and places exclude
 test('estimated sizes are labelled in placed and unplaced previews and editable room inputs',()=>{
  const estimated={...plan,dims_source:'estimated',rooms:plan.rooms.map(r=>r.id==='living'?{...r,width_m:4.2,length_m:3.6}:r.id==='upper'?{...r,x_m:null,y_m:null,width_m:4.2,length_m:3.6}:r),warnings:[{room_id:'living',message:'check size',reason:'Typical size used: no printed dimensions. Confirm before buying.'}]} as PlanResult;
  const editor=renderToStaticMarkup(React.createElement(RoomEditor,{plan:estimated,onChange:()=>{}}));assert.match(editor,/≈ 4.2 × 3.6 m/);assert.match(editor,/<small>estimated<\/small>/);assert.match(editor,/value="4.2"/);assert.match(editor,/value="3.6"/);assert.match(editor,/Typical size used/);assert.doesNotMatch(editor,/disabled|readonly/i);
- const preview=renderToStaticMarkup(React.createElement(FloorPlan,{plan:estimated}));assert.equal((preview.match(/≈ 4.2 × 3.6 m/g)||[]).length,2);assert.match(preview,/Estimated rooms to scale/);const printed=renderToStaticMarkup(React.createElement(FloorPlan,{plan}));assert.doesNotMatch(printed,/≈|estimated/);
+ const preview=renderToStaticMarkup(React.createElement(FloorPlan,{plan:estimated}));assert.equal((preview.match(/≈ 4.2 × 3.6 m/g)||[]).length,1);const upper=renderToStaticMarkup(React.createElement(FloorPlan,{plan:estimated,floor:1}));assert.match(upper,/Estimated rooms to scale/);const printed=renderToStaticMarkup(React.createElement(FloorPlan,{plan}));assert.doesNotMatch(printed,/≈|estimated/);
 });
-test('preview draws separate floors to scale and keeps unknown sizes out of geometry',()=>{
- const html=renderToStaticMarkup(React.createElement(FloorPlan,{plan}));assert.equal((html.match(/<svg/g)||[]).length,2);assert.match(html,/width="3.125"/);assert.match(html,/Floor 2/);assert.match(html,/Enter size/);assert.equal(html.includes('NaN'),false);
+test('two-floor preview renders tabs and only the first floor by default',()=>{
+ const html=renderToStaticMarkup(React.createElement(FloorPlan,{plan}));assert.equal((html.match(/role="tab"/g)||[]).length,2);assert.equal((html.match(/<svg/g)||[]).length,1);assert.match(html,/Living/);assert.doesNotMatch(html,/Bedroom/);assert.match(html,/aria-selected="true"/);assert.match(html,/· 1 room/);assert.match(html,/width="3.125"/);assert.match(html,/Floor 2/);assert.doesNotMatch(html,/Enter size/);assert.match(html,/<summary>Other spaces \(1\)<\/summary>/);assert.equal(html.includes('NaN'),false);
 });
 test('picker offers the catalogue and floor upload controls',()=>{
  const html=renderToStaticMarkup(React.createElement(PlanPicker,{busy:false,onAnalyse:async()=>{}}));assert.match(html,/Yas Acres/);assert.match(html,/Upload floor plan/);assert.match(html,/crop separately/);assert.match(html,/application\/pdf/);
+});
+test('selecting the second floor shows only its rooms',()=>{
+ const html=renderToStaticMarkup(React.createElement(FloorPlan,{plan,floor:1,onFloor:()=>{}}));assert.match(html,/Bedroom/);assert.doesNotMatch(html,/Living|Bathroom/);assert.match(html,/role="tab" aria-selected="true"[^>]*>Floor 2/);assert.doesNotMatch(html,/<h3>Floor/);
+});
+test('one-floor plans have a heading and no tabs',()=>{
+ const single={...plan,floors:1,rooms:plan.rooms.filter(r=>r.floor===0)};const html=renderToStaticMarkup(React.createElement(FloorPlan,{plan:single}));assert.doesNotMatch(html,/role="tab(list)?"/);assert.match(html,/<h3>Floor 1<\/h3>/);
+});
+test('only furnishable rooms with missing sizes ask for size',()=>{
+ const missing={...plan,rooms:plan.rooms.map(r=>r.id==='living'?{...r,width_m:null}:r)};const html=renderToStaticMarkup(React.createElement(FloorPlan,{plan:missing,floor:0}));assert.equal((html.match(/Enter size/g)||[]).length,1);assert.match(html,/<strong>Living<\/strong><span>Enter size/);assert.match(html,/<details><summary>Other spaces \(1\)<\/summary><p>Bathroom<\/p><\/details>/);
+});
+test('default floor is the first with a sized furnishable room, otherwise zero',()=>{
+ const upper={...plan,rooms:plan.rooms.filter(r=>r.id!=='living')};const html=renderToStaticMarkup(React.createElement(FloorPlan,{plan:upper}));assert.match(html,/Bedroom/);assert.doesNotMatch(html,/Bathroom/);const empty={...plan,rooms:plan.rooms.filter(r=>!r.furnish)};const preview=renderToStaticMarkup(React.createElement(FloorPlan,{plan:empty}));assert.match(preview,/No rooms to furnish on this floor/);assert.match(preview,/Bathroom/);assert.doesNotMatch(preview,/Enter size/);
+});
+test('room editor groups floors in order with other spaces inside each floor',()=>{
+ const html=renderToStaticMarkup(React.createElement(RoomEditor,{plan,onChange:()=>{}}));assert.ok(html.indexOf('Floor 1</h3>')<html.indexOf('Living'));assert.ok(html.indexOf('Bathroom')<html.indexOf('Floor 2</h3>'));assert.ok(html.indexOf('Floor 2</h3>')<html.indexOf('Bedroom'));
 });
 test('checklist derives room groups from the plan and hides unavailable categories',()=>{
  const needs=defaultNeeds(plan);assert.ok(needs.includes('sofa')&&needs.includes('bed'));assert.ok(!needs.includes('washing_machine'));
@@ -36,7 +51,7 @@ test('checklist derives room groups from the plan and hides unavailable categori
 });
 test('furniture geometry uses room-local metre coordinates on its own floor',()=>{
  const furniture=[{id:'bed',title:'Test bed',size_estimated:true,placement:{room_id:'upper',x_m:1,y_m:.25,width_m:2,depth_m:1.5}}];
- const html=renderToStaticMarkup(React.createElement(FloorPlan,{plan,furniture}));
+ const html=renderToStaticMarkup(React.createElement(FloorPlan,{plan,furniture,floor:1}));
  assert.equal((html.match(/class="furniture-footprint"/g)||[]).length,1);assert.match(html,/x="1" y="0.25" width="2" height="1.5"/);assert.match(html,/estimated dimensions/);
  assert.ok(html.indexOf('Floor 2')<html.indexOf('Test bed'));
 });
